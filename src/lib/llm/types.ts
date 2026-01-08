@@ -13,6 +13,17 @@ import { CoachMode, CoachingMove, CalibrationTone, GoalsAndActions, BusinessPlan
 
 export type LLMProvider = 'claude' | 'openai';
 
+/**
+ * Task types for smart model routing
+ * Routes to appropriate model based on cost/quality tradeoffs
+ */
+export type TaskType =
+  | 'COACHING'        // Nuanced coaching responses → Claude Sonnet
+  | 'ACKNOWLEDGMENT'  // Simple confirmations → GPT-4o-mini (cheap)
+  | 'ACTION_GEN'      // Daily action generation → GPT-4o-mini (structured)
+  | 'VISION'          // Screenshot analysis → Claude Sonnet (quality)
+  | 'CALIBRATION';    // Calibration questions → Claude Sonnet (quality)
+
 export interface LLMConfig {
   provider: LLMProvider;
   apiKey: string;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { GoalCard } from "@/components/goals/GoalCard";
 import { ActionCard } from "@/components/actions/ActionCard";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { generateDailyPlan, type DailyActionPlan } from "@/lib/daily-action-engine";
+import { getLLMClient } from "@/lib/llm/client";
 
 interface Action {
   id: string;
@@ -70,6 +71,8 @@ export default function GoalsAndActions() {
 
   // Daily action plan from engine (Stream 3)
   const [actionPlan, setActionPlan] = useState<DailyActionPlan | null>(null);
+  const [isGeneratingActions, setIsGeneratingActions] = useState(false);
+  const hasGeneratedRef = useRef(false);
 
   // Determine if we should show calibration UI or actions
   const showCalibrationUI = calibration.isCalibrating || calibration.state.userState === 'G&A_DRAFTED';
@@ -86,47 +89,184 @@ export default function GoalsAndActions() {
     }
   }, [user]);
 
-  // Generate daily action plan from engine when G&A is confirmed (Stream 3)
+  // Generate daily action plan from LLM or fallback to local engine (Stream 3)
   useEffect(() => {
-    if (canShowActions && calibration.state.goalsAndActions) {
+    async function generateActions() {
+      if (!canShowActions || !calibration.state.goalsAndActions || hasGeneratedRef.current) {
+        return;
+      }
+
+      hasGeneratedRef.current = true;
+      setIsGeneratingActions(true);
+
+      try {
+        // Try LLM generation first (uses GPT-4o-mini for cost efficiency)
+        const llmClient = getLLMClient();
+
+        if (llmClient.isConfigured()) {
+          console.log('[Actions] Generating with LLM...');
+
+          const llmActions = await llmClient.generateDailyActions({
+            goalsAndActions: calibration.state.goalsAndActions,
+            businessPlan: null,
+            tone: calibration.state.tone,
+            currentMode: 'DIRECT',
+            currentMove: 'NONE',
+            recentMessages: [],
+          });
+
+          // Convert LLM response to DailyActionPlan format
+          const plan: DailyActionPlan = {
+            date: new Date().toISOString().split('T')[0],
+            primary: {
+              id: `llm-primary-${Date.now()}`,
+              title: llmActions.primary.title,
+              description: llmActions.primary.description,
+              type: 'primary',
+              category: 'contact',
+              minutesEstimate: 15,
+              minimumViable: llmActions.primary.minimumViable,
+              stretchGoal: '',
+              steps: [],
+              milestoneConnection: llmActions.primary.milestoneConnection,
+            },
+            supporting: llmActions.supporting.map((action, index) => ({
+              id: `llm-supporting-${Date.now()}-${index}`,
+              title: action.title,
+              description: action.description,
+              type: 'supporting',
+              category: 'non_contact',
+              minutesEstimate: 10,
+              minimumViable: action.description,
+              stretchGoal: '',
+              steps: [],
+              milestoneConnection: action.purpose,
+            })),
+            readinessGate: null,
+          };
+
+          setActionPlan(plan);
+
+          // Save to Supabase if user is logged in
+          if (user) {
+            await saveActionsToSupabase(plan);
+          }
+
+          // Convert to Action[] format for UI
+          const engineActions = convertPlanToActions(plan);
+          if (engineActions.length > 0) {
+            setActions(engineActions);
+          }
+
+          console.log('[Actions] LLM generation complete');
+          return;
+        }
+      } catch (error) {
+        console.error('[Actions] LLM generation failed, falling back to local engine:', error);
+      }
+
+      // Fallback to local engine
+      console.log('[Actions] Using local engine...');
       const plan = generateDailyPlan(
         calibration.state.goalsAndActions,
-        null, // businessPlan (not yet implemented)
-        [],   // pipeline (empty for now, will come from Supabase)
+        null,
+        [],
         { type: 'NONE', description: '', mayOverridePrimary: false },
-        false // reducedLoad
+        false
       );
       setActionPlan(plan);
 
-      // Convert plan to Action[] format for existing UI compatibility
-      const engineActions: Action[] = [];
-
-      if (plan.primary) {
-        engineActions.push({
-          id: plan.primary.id,
-          title: plan.primary.title,
-          description: plan.primary.description,
-          priority: 'high',
-          completed: false,
-        });
-      }
-
-      plan.supporting.forEach(action => {
-        engineActions.push({
-          id: action.id,
-          title: action.title,
-          description: action.description,
-          priority: 'medium',
-          completed: false,
-        });
-      });
-
-      // Only use engine actions if we have them, otherwise keep demo
+      const engineActions = convertPlanToActions(plan);
       if (engineActions.length > 0) {
         setActions(engineActions);
       }
+
+      setIsGeneratingActions(false);
     }
-  }, [canShowActions, calibration.state.goalsAndActions]);
+
+    generateActions();
+  }, [canShowActions, calibration.state.goalsAndActions, calibration.state.tone, user]);
+
+  // Helper to convert plan to Action[] format
+  function convertPlanToActions(plan: DailyActionPlan): Action[] {
+    const actions: Action[] = [];
+
+    if (plan.primary) {
+      actions.push({
+        id: plan.primary.id,
+        title: plan.primary.title,
+        description: plan.primary.description,
+        priority: 'high',
+        completed: false,
+      });
+    }
+
+    plan.supporting.forEach(action => {
+      actions.push({
+        id: action.id,
+        title: action.title,
+        description: action.description,
+        priority: 'medium',
+        completed: false,
+      });
+    });
+
+    return actions;
+  }
+
+  // Save generated actions to Supabase
+  async function saveActionsToSupabase(plan: DailyActionPlan) {
+    if (!user) return;
+
+    const today = new Date().toISOString().split('T')[0];
+
+    try {
+      // Delete existing actions for today first
+      await supabase
+        .from('action_items')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('action_date', today);
+
+      // Insert primary action
+      if (plan.primary) {
+        await supabase.from('action_items').insert({
+          user_id: user.id,
+          title: plan.primary.title,
+          description: plan.primary.description,
+          action_type: 'primary',
+          category: plan.primary.category,
+          minimum_viable: plan.primary.minimumViable,
+          milestone_connection: plan.primary.milestoneConnection,
+          minutes_estimate: plan.primary.minutesEstimate,
+          action_date: today,
+          priority: 'high',
+          status: 'pending',
+        });
+      }
+
+      // Insert supporting actions
+      for (const action of plan.supporting) {
+        await supabase.from('action_items').insert({
+          user_id: user.id,
+          title: action.title,
+          description: action.description,
+          action_type: 'supporting',
+          category: action.category,
+          minimum_viable: action.minimumViable,
+          milestone_connection: action.milestoneConnection,
+          minutes_estimate: action.minutesEstimate,
+          action_date: today,
+          priority: 'medium',
+          status: 'pending',
+        });
+      }
+
+      console.log('[Actions] Saved to Supabase');
+    } catch (error) {
+      console.error('[Actions] Failed to save to Supabase:', error);
+    }
+  }
 
   const fetchActions = async () => {
     if (!user) return;

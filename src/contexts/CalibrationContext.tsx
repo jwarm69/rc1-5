@@ -11,7 +11,7 @@
  * - Persist state to localStorage (and eventually Supabase)
  */
 
-import React, { createContext, useContext, useEffect, useReducer, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useReducer, useCallback, useRef } from 'react';
 import {
   CalibrationState,
   CalibrationTone,
@@ -40,6 +40,8 @@ import {
   handleUnclearAnswer,
   resetCalibration,
 } from '@/lib/calibration';
+import { useSupabaseCalibration } from '@/hooks/useSupabaseCalibration';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ============================================================================
 // TYPES
@@ -161,41 +163,97 @@ const STORAGE_KEY = 'realcoach_calibration_state';
 export function CalibrationProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(calibrationReducer, INITIAL_CALIBRATION_STATE);
   const [isLoading, setIsLoading] = React.useState(true);
+  const { user } = useAuth();
+  const { loadCalibrationState, saveCalibrationState, deleteCalibrationState, isAuthenticated } = useSupabaseCalibration();
+  const hasLoadedRef = useRef(false);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load state from localStorage on mount
+  // Load state from Supabase (if authenticated) or localStorage
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // Convert date strings back to Date objects
-        if (parsed.startedAt) parsed.startedAt = new Date(parsed.startedAt);
-        if (parsed.completedAt) parsed.completedAt = new Date(parsed.completedAt);
-        if (parsed.goalsAndActions?.createdAt) {
-          parsed.goalsAndActions.createdAt = new Date(parsed.goalsAndActions.createdAt);
-        }
-        if (parsed.goalsAndActions?.confirmedAt) {
-          parsed.goalsAndActions.confirmedAt = new Date(parsed.goalsAndActions.confirmedAt);
-        }
-        dispatch({ type: 'LOAD_STATE', payload: parsed });
-      }
-    } catch (error) {
-      console.error('Failed to load calibration state:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    async function loadState() {
+      // Only load once per mount
+      if (hasLoadedRef.current) return;
+      hasLoadedRef.current = true;
 
-  // Save state to localStorage on change
+      try {
+        // If authenticated, try Supabase first
+        if (isAuthenticated) {
+          console.log('[Calibration] Loading from Supabase...');
+          const supabaseState = await loadCalibrationState();
+          if (supabaseState) {
+            console.log('[Calibration] Loaded from Supabase');
+            dispatch({ type: 'LOAD_STATE', payload: supabaseState });
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        // Fall back to localStorage
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          console.log('[Calibration] Loading from localStorage...');
+          const parsed = JSON.parse(saved);
+          // Convert date strings back to Date objects
+          if (parsed.startedAt) parsed.startedAt = new Date(parsed.startedAt);
+          if (parsed.completedAt) parsed.completedAt = new Date(parsed.completedAt);
+          if (parsed.goalsAndActions?.createdAt) {
+            parsed.goalsAndActions.createdAt = new Date(parsed.goalsAndActions.createdAt);
+          }
+          if (parsed.goalsAndActions?.confirmedAt) {
+            parsed.goalsAndActions.confirmedAt = new Date(parsed.goalsAndActions.confirmedAt);
+          }
+          dispatch({ type: 'LOAD_STATE', payload: parsed });
+
+          // If user just logged in, sync localStorage state to Supabase
+          if (isAuthenticated) {
+            console.log('[Calibration] Syncing localStorage to Supabase...');
+            await saveCalibrationState(parsed);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load calibration state:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadState();
+  }, [isAuthenticated, loadCalibrationState, saveCalibrationState]);
+
+  // Reset loaded flag when user changes
+  useEffect(() => {
+    hasLoadedRef.current = false;
+  }, [user?.id]);
+
+  // Save state to both localStorage and Supabase on change (debounced)
   useEffect(() => {
     if (!isLoading) {
+      // Always save to localStorage (fast, synchronous backup)
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       } catch (error) {
-        console.error('Failed to save calibration state:', error);
+        console.error('Failed to save to localStorage:', error);
+      }
+
+      // Debounce Supabase saves to avoid too many requests
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+
+      if (isAuthenticated) {
+        saveTimeoutRef.current = setTimeout(async () => {
+          console.log('[Calibration] Saving to Supabase...');
+          await saveCalibrationState(state);
+        }, 1000); // 1 second debounce
       }
     }
-  }, [state, isLoading]);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [state, isLoading, isAuthenticated, saveCalibrationState]);
 
   // Computed values
   const canShowActions = canShowDailyActions(state);
@@ -240,9 +298,15 @@ export function CalibrationProvider({ children }: { children: React.ReactNode })
     dispatch({ type: 'ENTER_FAST_LANE' });
   }, []);
 
-  const reset = useCallback(() => {
+  const reset = useCallback(async () => {
     dispatch({ type: 'RESET' });
-  }, []);
+    // Also clear from Supabase
+    if (isAuthenticated) {
+      await deleteCalibrationState();
+    }
+    // Clear localStorage
+    localStorage.removeItem(STORAGE_KEY);
+  }, [isAuthenticated, deleteCalibrationState]);
 
   const checkForFastLane = useCallback((userText: string): boolean => {
     return detectFastLane(userText);

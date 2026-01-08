@@ -102,6 +102,61 @@ export class ClaudeAdapter implements LLMAdapter {
   }
 }
 
+/**
+ * Generate a response with an image (Claude Vision)
+ */
+export async function generateWithVision(
+  apiKey: string,
+  prompt: string,
+  imageBase64: string,
+  mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' = 'image/png'
+): Promise<string> {
+  const baseUrl = 'https://api.anthropic.com/v1';
+  const model = 'claude-sonnet-4-20250514';
+
+  const body = {
+    model,
+    max_tokens: 1024,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: mediaType,
+              data: imageBase64,
+            },
+          },
+          {
+            type: 'text',
+            text: prompt,
+          },
+        ],
+      },
+    ],
+  };
+
+  const response = await fetch(`${baseUrl}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error?.message || `Vision API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.content[0]?.text || '';
+}
+
 function mapStopReason(reason: string | undefined): 'stop' | 'length' | 'content_filter' {
   switch (reason) {
     case 'end_turn':

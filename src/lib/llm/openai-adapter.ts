@@ -14,11 +14,12 @@ export class OpenAIAdapter implements LLMAdapter {
 
   constructor(config: LLMConfig) {
     this.apiKey = config.apiKey;
-    this.model = config.model || 'gpt-4o';
+    this.model = config.model || 'gpt-4o-mini'; // Default to cheaper model
   }
 
   validateConfig(): boolean {
-    return !!this.apiKey && this.apiKey.startsWith('sk-');
+    // Accept both legacy (sk-) and new project-based (sk-proj-) API keys
+    return !!this.apiKey && (this.apiKey.startsWith('sk-') || this.apiKey.startsWith('sk-proj-'));
   }
 
   async generate(request: LLMRequest): Promise<LLMResponse> {

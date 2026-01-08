@@ -1,8 +1,12 @@
 /**
- * RealCoach.ai - LLM Client
+ * RealCoach.ai - LLM Client with Smart Routing
  *
  * Provider-agnostic LLM client that supports Claude and OpenAI.
- * Handles coaching response generation with behavior rules enforcement.
+ * Routes requests to appropriate models based on task type for cost optimization.
+ *
+ * Routing Strategy:
+ * - COACHING, CALIBRATION, VISION → Claude Sonnet (quality)
+ * - ACKNOWLEDGMENT, ACTION_GEN → GPT-4o-mini (cheap)
  */
 
 import {
@@ -15,56 +19,119 @@ import {
   CoachingContext,
   CoachingResponse,
   LLMError,
+  TaskType,
 } from './types';
-import { ClaudeAdapter } from './claude-adapter';
+import { ClaudeAdapter, generateWithVision } from './claude-adapter';
 import { OpenAIAdapter } from './openai-adapter';
 import { buildSystemPrompt, buildDailyActionPrompt } from './prompts';
 import { CoachMode, CoachingMove } from '@/types/coaching';
 
 // ============================================================================
-// LLM CLIENT
+// ROUTING CONFIGURATION
+// ============================================================================
+
+interface ModelRoute {
+  provider: LLMProvider;
+  model: string;
+}
+
+const ROUTE_CONFIG: Record<TaskType, ModelRoute> = {
+  // Quality tasks → Claude Sonnet
+  COACHING: { provider: 'claude', model: 'claude-sonnet-4-20250514' },
+  CALIBRATION: { provider: 'claude', model: 'claude-sonnet-4-20250514' },
+  VISION: { provider: 'claude', model: 'claude-sonnet-4-20250514' },
+  // Cost-optimized tasks → GPT-4o-mini
+  ACKNOWLEDGMENT: { provider: 'openai', model: 'gpt-4o-mini' },
+  ACTION_GEN: { provider: 'openai', model: 'gpt-4o-mini' },
+};
+
+// ============================================================================
+// SMART ROUTING LLM CLIENT
 // ============================================================================
 
 export class LLMClient {
-  private adapter: LLMAdapter;
-  private config: LLMConfig;
+  private claudeAdapter: LLMAdapter | null = null;
+  private openaiAdapter: LLMAdapter | null = null;
+  private fallbackProvider: LLMProvider | null = null;
 
-  constructor(config: LLMConfig) {
-    this.config = config;
-    this.adapter = this.createAdapter(config);
-  }
+  constructor() {
+    // Initialize adapters based on available API keys
+    const claudeKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+    const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
 
-  private createAdapter(config: LLMConfig): LLMAdapter {
-    switch (config.provider) {
-      case 'claude':
-        return new ClaudeAdapter(config);
-      case 'openai':
-        return new OpenAIAdapter(config);
-      default:
-        throw new LLMError(
-          `Unknown provider: ${config.provider}`,
-          'INVALID_CONFIG'
-        );
+    if (claudeKey && !claudeKey.includes('YOUR_')) {
+      this.claudeAdapter = new ClaudeAdapter({
+        provider: 'claude',
+        apiKey: claudeKey,
+      });
+      this.fallbackProvider = 'claude';
     }
+
+    if (openaiKey && !openaiKey.includes('YOUR_')) {
+      this.openaiAdapter = new OpenAIAdapter({
+        provider: 'openai',
+        apiKey: openaiKey,
+      });
+      if (!this.fallbackProvider) {
+        this.fallbackProvider = 'openai';
+      }
+    }
+
+    // Log routing status
+    console.log('[LLM Client] Initialized with:', {
+      claude: !!this.claudeAdapter,
+      openai: !!this.openaiAdapter,
+      fallback: this.fallbackProvider,
+    });
   }
 
   /**
-   * Switch to a different LLM provider
+   * Get the appropriate adapter for a task type
    */
-  setProvider(provider: LLMProvider, apiKey?: string): void {
-    this.config = {
-      ...this.config,
-      provider,
-      apiKey: apiKey || this.config.apiKey,
-    };
-    this.adapter = this.createAdapter(this.config);
+  private getAdapterForTask(taskType: TaskType): { adapter: LLMAdapter; model: string } | null {
+    const route = ROUTE_CONFIG[taskType];
+
+    // Try preferred provider first
+    if (route.provider === 'claude' && this.claudeAdapter) {
+      return { adapter: this.claudeAdapter, model: route.model };
+    }
+    if (route.provider === 'openai' && this.openaiAdapter) {
+      return { adapter: this.openaiAdapter, model: route.model };
+    }
+
+    // Fallback to available provider
+    if (this.claudeAdapter) {
+      console.log(`[LLM Router] Falling back to Claude for ${taskType}`);
+      return { adapter: this.claudeAdapter, model: 'claude-sonnet-4-20250514' };
+    }
+    if (this.openaiAdapter) {
+      console.log(`[LLM Router] Falling back to OpenAI for ${taskType}`);
+      return { adapter: this.openaiAdapter, model: 'gpt-4o-mini' };
+    }
+
+    return null;
   }
 
   /**
-   * Generate a raw LLM response
+   * Check if any LLM provider is configured
    */
-  async generate(request: LLMRequest): Promise<LLMResponse> {
-    return this.adapter.generate(request);
+  isConfigured(): boolean {
+    return !!(this.claudeAdapter || this.openaiAdapter);
+  }
+
+  /**
+   * Generate a raw LLM response with task-based routing
+   */
+  async generate(request: LLMRequest, taskType: TaskType = 'COACHING'): Promise<LLMResponse> {
+    const routeInfo = this.getAdapterForTask(taskType);
+
+    if (!routeInfo) {
+      throw new LLMError('No LLM provider configured', 'INVALID_CONFIG');
+    }
+
+    console.log(`[LLM Router] ${taskType} → ${routeInfo.adapter.provider} (${routeInfo.model})`);
+
+    return routeInfo.adapter.generate(request);
   }
 
   /**
@@ -74,6 +141,21 @@ export class LLMClient {
     userMessage: string,
     context: CoachingContext
   ): Promise<CoachingResponse> {
+    // Determine task type based on context
+    const taskType = this.inferTaskType(userMessage, context);
+    const routeInfo = this.getAdapterForTask(taskType);
+
+    if (!routeInfo) {
+      // Return mock response if no provider configured
+      return {
+        message: getMockCoachingResponse(userMessage),
+        questionsAsked: 1,
+        policyViolations: [],
+      };
+    }
+
+    console.log(`[LLM Router] Coaching (${taskType}) → ${routeInfo.adapter.provider}`);
+
     const systemPrompt = buildSystemPrompt(context);
 
     const messages: LLMMessage[] = [
@@ -82,7 +164,7 @@ export class LLMClient {
       { role: 'user', content: userMessage },
     ];
 
-    const response = await this.adapter.generate({ messages });
+    const response = await routeInfo.adapter.generate({ messages });
 
     // Validate the response
     const validation = this.validateResponse(response.content, context.currentMode);
@@ -98,7 +180,32 @@ export class LLMClient {
   }
 
   /**
+   * Infer task type from message and context
+   */
+  private inferTaskType(userMessage: string, context: CoachingContext): TaskType {
+    const lower = userMessage.toLowerCase();
+
+    // Simple acknowledgments
+    const ackPatterns = [
+      /^(ok|okay|got it|thanks|thank you|yes|no|sure|sounds good)\.?$/i,
+      /^(cool|great|perfect|alright|fine)\.?$/i,
+    ];
+    if (ackPatterns.some(p => p.test(lower.trim()))) {
+      return 'ACKNOWLEDGMENT';
+    }
+
+    // Calibration mode
+    if (context.currentMode === 'CLARIFY' && !context.goalsAndActions) {
+      return 'CALIBRATION';
+    }
+
+    // Default to coaching
+    return 'COACHING';
+  }
+
+  /**
    * Generate daily actions based on user's goals
+   * Uses cheaper model (GPT-4o-mini) for structured output
    */
   async generateDailyActions(
     context: CoachingContext,
@@ -107,6 +214,29 @@ export class LLMClient {
     primary: { title: string; description: string; minimumViable: string; milestoneConnection: string };
     supporting: Array<{ title: string; description: string; purpose: string }>;
   }> {
+    const routeInfo = this.getAdapterForTask('ACTION_GEN');
+
+    if (!routeInfo) {
+      // Return mock actions if no provider configured
+      return {
+        primary: {
+          title: 'Focus on your top pipeline opportunity',
+          description: 'Review and take one action on your most promising lead',
+          minimumViable: 'Send one follow-up message',
+          milestoneConnection: 'Keeps pipeline moving toward your monthly goal',
+        },
+        supporting: [
+          {
+            title: 'Update your CRM notes',
+            description: 'Document recent conversations',
+            purpose: 'Ensures nothing falls through the cracks',
+          },
+        ],
+      };
+    }
+
+    console.log(`[LLM Router] Action generation → ${routeInfo.adapter.provider} (${routeInfo.model})`);
+
     const systemPrompt = buildDailyActionPrompt(context);
 
     const messages: LLMMessage[] = [
@@ -125,7 +255,7 @@ export class LLMClient {
       });
     }
 
-    const response = await this.adapter.generate({
+    const response = await routeInfo.adapter.generate({
       messages,
       options: { temperature: 0.3 }, // Lower temperature for structured output
     });
@@ -150,6 +280,68 @@ export class LLMClient {
       },
       supporting: [],
     };
+  }
+
+  /**
+   * Analyze a screenshot and extract context for coaching
+   * Uses Claude Vision for high-quality image understanding
+   */
+  async analyzeScreenshot(
+    imageBase64: string,
+    contextPrompt?: string
+  ): Promise<{ description: string; suggestedAction?: string; insights: string[] }> {
+    const claudeKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+
+    if (!claudeKey || claudeKey.includes('YOUR_')) {
+      console.warn('[LLM Client] No Claude API key for vision analysis');
+      return {
+        description: 'Screenshot uploaded but analysis unavailable without Claude API key.',
+        insights: [],
+      };
+    }
+
+    const prompt = contextPrompt || `You are a coaching assistant for a real estate agent. Analyze this screenshot and provide:
+
+1. A brief description of what you see (1-2 sentences)
+2. If relevant, a suggested action the agent could take based on this content
+3. 2-3 key insights or observations
+
+Focus on information relevant to their real estate business - contacts, leads, property details, CRM data, email content, calendar items, etc.
+
+Respond in this JSON format:
+{
+  "description": "Brief description of the screenshot content",
+  "suggestedAction": "Optional suggested action if applicable",
+  "insights": ["Insight 1", "Insight 2", "Insight 3"]
+}`;
+
+    try {
+      console.log('[LLM Router] Screenshot analysis → Claude Vision');
+
+      const response = await generateWithVision(claudeKey, prompt, imageBase64);
+
+      // Parse JSON from response
+      try {
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0]);
+        }
+      } catch (e) {
+        console.error('Failed to parse vision response JSON:', e);
+      }
+
+      // Fallback: return raw response as description
+      return {
+        description: response,
+        insights: [],
+      };
+    } catch (error) {
+      console.error('[LLM Client] Vision analysis failed:', error);
+      return {
+        description: 'Failed to analyze screenshot. Please try again.',
+        insights: [],
+      };
+    }
   }
 
   /**
@@ -342,58 +534,21 @@ let clientInstance: LLMClient | null = null;
  */
 export function getLLMClient(): LLMClient {
   if (!clientInstance) {
-    const provider = (import.meta.env.VITE_LLM_PROVIDER as LLMProvider) || 'claude';
-    const apiKey = provider === 'claude'
-      ? import.meta.env.VITE_ANTHROPIC_API_KEY
-      : import.meta.env.VITE_OPENAI_API_KEY;
-
-    if (!apiKey) {
-      console.warn('No LLM API key configured. Using mock responses.');
-      // Return a mock client for development
-      return createMockClient();
-    }
-
-    clientInstance = new LLMClient({
-      provider,
-      apiKey,
-    });
+    clientInstance = new LLMClient();
   }
-
   return clientInstance;
 }
 
 /**
- * Create a mock client for development without API keys
+ * Reset the client instance (useful for testing or key updates)
  */
-function createMockClient(): LLMClient {
-  return {
-    generate: async () => ({
-      content: 'This is a mock response. Configure VITE_ANTHROPIC_API_KEY or VITE_OPENAI_API_KEY for real responses.',
-      usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-    }),
-    generateCoachingResponse: async (userMessage: string) => ({
-      message: getMockCoachingResponse(userMessage),
-      questionsAsked: 1,
-      policyViolations: [],
-    }),
-    generateDailyActions: async () => ({
-      primary: {
-        title: 'Focus on your top pipeline opportunity',
-        description: 'Review and take one action on your most promising lead',
-        minimumViable: 'Send one follow-up message',
-        milestoneConnection: 'Keeps pipeline moving toward your monthly goal',
-      },
-      supporting: [
-        {
-          title: 'Update your CRM notes',
-          description: 'Document recent conversations',
-          purpose: 'Ensures nothing falls through the cracks',
-        },
-      ],
-    }),
-    setProvider: () => {},
-  } as unknown as LLMClient;
+export function resetLLMClient(): void {
+  clientInstance = null;
 }
+
+// ============================================================================
+// MOCK RESPONSES (for development without API keys)
+// ============================================================================
 
 function getMockCoachingResponse(userMessage: string): string {
   const lower = userMessage.toLowerCase();
