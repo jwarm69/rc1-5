@@ -1,0 +1,847 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+/* RealCoach.ai Design System
+   Philosophy: Calm, intentional, quietly confident
+   Dark premium base with Matrix green intelligence glows and Tiffany blue focus states
+   Mobile-first: Spacious, readable, thumb-friendly
+*/
+
+@layer base {
+  :root {
+    /* Core palette - Dark premium (Default) */
+    --background: 220 15% 5%;
+    --foreground: 210 20% 92%;
+
+    --card: 220 14% 8%;
+    --card-foreground: 210 20% 92%;
+
+    --popover: 220 14% 10%;
+    --popover-foreground: 210 20% 92%;
+
+    /* Primary - Matrix green for intelligence/AI moments */
+    --primary: 156 100% 50%;
+    --primary-foreground: 220 15% 5%;
+
+    /* Secondary - Subtle dark surface */
+    --secondary: 220 12% 12%;
+    --secondary-foreground: 210 15% 70%;
+
+    /* Muted - For subdued elements */
+    --muted: 220 12% 15%;
+    --muted-foreground: 215 12% 50%;
+
+    /* Accent - Tiffany blue for focus/hover */
+    --accent: 175 100% 37%;
+    --accent-foreground: 220 15% 5%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 210 20% 92%;
+
+    --border: 220 10% 18%;
+    --input: 220 12% 15%;
+    --ring: 156 100% 50%;
+
+    --radius: 0.5rem;
+
+    /* Custom tokens */
+    --glow-primary: 0 0 40px hsl(156 100% 50% / 0.15);
+    --glow-accent: 0 0 30px hsl(175 100% 37% / 0.1);
+    
+    /* Sidebar - Coach panel */
+    --sidebar-background: 220 14% 7%;
+    --sidebar-foreground: 210 15% 75%;
+    --sidebar-primary: 156 100% 50%;
+    --sidebar-primary-foreground: 220 15% 5%;
+    --sidebar-accent: 220 12% 12%;
+    --sidebar-accent-foreground: 210 15% 80%;
+    --sidebar-border: 220 10% 15%;
+    --sidebar-ring: 156 100% 50%;
+    
+    /* Chart colors */
+    --chart-1: 156 100% 50%;
+    --chart-2: 175 100% 37%;
+    --chart-3: 210 15% 40%;
+    --chart-4: 220 12% 25%;
+    --chart-5: 200 15% 35%;
+  }
+
+  /* Light Mode - Premium light interface with layered depth */
+  .light {
+    /* Core palette - Layered off-white backgrounds for depth */
+    --background: 220 14% 96%;
+    --foreground: 220 20% 8%;
+
+    /* Cards elevated with pure white for clear separation */
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 6%;
+
+    /* Popovers/modals pure white for focus */
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 6%;
+
+    /* Primary - Matrix green slightly darker for light bg readability */
+    --primary: 156 90% 35%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary - Noticeably different from background */
+    --secondary: 220 12% 90%;
+    --secondary-foreground: 220 20% 12%;
+
+    /* Muted - Clear hierarchy, never invisible */
+    --muted: 220 12% 88%;
+    --muted-foreground: 220 15% 30%;
+
+    /* Accent - Tiffany blue darker for contrast */
+    --accent: 175 85% 28%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 42%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Strong borders for clear card definition */
+    --border: 220 14% 78%;
+    --input: 220 12% 92%;
+    --ring: 156 90% 35%;
+
+    /* Custom tokens - Visible glows for light mode */
+    --glow-primary: 0 0 25px hsl(156 90% 35% / 0.25);
+    --glow-accent: 0 0 20px hsl(175 85% 28% / 0.2);
+    
+    /* Sidebar/Coach panel - Clearly separated from main canvas */
+    --sidebar-background: 220 15% 92%;
+    --sidebar-foreground: 220 20% 12%;
+    --sidebar-primary: 156 90% 35%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 85%;
+    --sidebar-accent-foreground: 220 20% 10%;
+    --sidebar-border: 220 14% 75%;
+    --sidebar-ring: 156 90% 35%;
+    
+    /* Chart colors - High contrast for light mode readability */
+    --chart-1: 156 90% 32%;
+    --chart-2: 175 85% 28%;
+    --chart-3: 210 25% 30%;
+    --chart-4: 220 18% 55%;
+    --chart-5: 200 25% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply antialiased;
+    /* Prevent text size adjustment on orientation change */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    /* Better mobile rendering */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Smooth theme transition */
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  /* Theme transition for all elements */
+  *, *::before, *::after {
+    transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+}
+
+@layer components {
+  /* ===== MOBILE TYPOGRAPHY SYSTEM ===== */
+  .mobile-heading-lg {
+    @apply text-2xl md:text-3xl lg:text-4xl font-light leading-tight;
+  }
+  
+  .mobile-heading-md {
+    @apply text-xl md:text-2xl lg:text-3xl font-light leading-tight;
+  }
+  
+  .mobile-heading-sm {
+    @apply text-lg md:text-xl font-medium leading-snug;
+  }
+  
+  .mobile-body {
+    @apply text-base md:text-sm leading-relaxed;
+  }
+  
+  .mobile-body-sm {
+    @apply text-sm leading-relaxed;
+  }
+
+  /* ===== TOUCH TARGETS ===== */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+  
+  .touch-target-sm {
+    @apply min-h-[36px] min-w-[36px];
+  }
+
+  /* ===== MOBILE SPACING ===== */
+  .mobile-section {
+    @apply py-16 md:py-24 lg:py-32 px-5 md:px-6;
+  }
+  
+  .mobile-card {
+    @apply p-5 md:p-6 lg:p-8;
+  }
+
+  /* Navigation link styles */
+  .nav-link {
+    @apply relative px-3 md:px-4 py-2.5 md:py-2 text-sm font-medium text-muted-foreground transition-colors duration-200;
+    @apply min-h-[44px] flex items-center justify-center;
+  }
+  
+  .nav-link:hover {
+    @apply text-foreground;
+  }
+  
+  .nav-link.active {
+    @apply text-foreground;
+  }
+  
+  .nav-link.active::after {
+    content: '';
+    @apply absolute bottom-0 left-3 right-3 md:left-4 md:right-4 h-px bg-primary;
+  }
+
+  /* Mobile bottom nav link */
+  .mobile-nav-link {
+    @apply flex flex-col items-center justify-center gap-1 py-2 px-3 text-muted-foreground transition-colors duration-200 min-w-[64px];
+  }
+  
+  .mobile-nav-link.active {
+    @apply text-primary;
+  }
+  
+  .mobile-nav-link:hover {
+    @apply text-foreground;
+  }
+
+  /* Coach panel glow effect */
+  .coach-panel {
+    @apply border-l border-border;
+    box-shadow: inset 4px 0 20px hsl(156 100% 50% / 0.03);
+  }
+
+  /* Premium CTA Button - Matrix Green */
+  .premium-btn-matrix {
+    background: linear-gradient(135deg, hsl(220 15% 8%) 0%, hsl(156 80% 15%) 50%, hsl(220 15% 8%) 100%);
+    border: 1px solid hsl(156 100% 50% / 0.3);
+  }
+
+  .premium-btn-matrix:hover {
+    border-color: hsl(156 100% 50% / 0.5);
+  }
+
+  .premium-flow-matrix {
+    background: linear-gradient(
+      90deg,
+      hsl(220 15% 5%) 0%,
+      hsl(156 100% 25% / 0.6) 25%,
+      hsl(220 15% 8%) 50%,
+      hsl(156 100% 30% / 0.5) 75%,
+      hsl(220 15% 5%) 100%
+    );
+    background-size: 200% 100%;
+    animation: flow-matrix 4s ease-in-out infinite;
+  }
+
+  @keyframes flow-matrix {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Premium CTA Button - Tiffany Blue */
+  .premium-btn-tiffany {
+    background: linear-gradient(135deg, hsl(220 15% 8%) 0%, hsl(175 80% 18%) 50%, hsl(220 15% 8%) 100%);
+    border: 1px solid hsl(175 100% 37% / 0.3);
+  }
+
+  .premium-btn-tiffany:hover {
+    border-color: hsl(175 100% 37% / 0.5);
+  }
+
+  .premium-flow-tiffany {
+    background: linear-gradient(
+      90deg,
+      hsl(220 15% 5%) 0%,
+      hsl(175 100% 25% / 0.5) 25%,
+      hsl(220 15% 8%) 50%,
+      hsl(175 100% 30% / 0.4) 75%,
+      hsl(220 15% 5%) 100%
+    );
+    background-size: 200% 100%;
+    animation: flow-tiffany 4s ease-in-out infinite;
+    animation-delay: -2s;
+  }
+
+  @keyframes flow-tiffany {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Awareness bar in pipeline */
+  .awareness-bar {
+    @apply h-8 rounded-sm bg-secondary relative overflow-hidden;
+  }
+  
+  .awareness-bar-fill {
+    @apply h-full bg-primary transition-all duration-500 ease-out;
+  }
+
+  /* Action card */
+  .action-card {
+    @apply p-4 md:p-5 rounded-lg bg-card border border-border transition-all duration-200;
+  }
+  
+  .action-card:hover {
+    @apply border-primary/30;
+    box-shadow: var(--glow-primary);
+  }
+
+  /* Goal card - subtle and context-only */
+  .goal-card {
+    @apply p-4 rounded-lg bg-secondary/50 border border-border/50;
+  }
+
+  /* Strategy column */
+  .strategy-column {
+    @apply p-4 md:p-5 rounded-lg bg-card border border-border;
+  }
+
+  /* Data table row */
+  .data-row {
+    @apply border-b border-border/50 transition-colors duration-150;
+  }
+  
+  .data-row:hover {
+    @apply bg-secondary/30;
+  }
+
+  /* Mobile data card - for stacked table view */
+  .mobile-data-card {
+    @apply p-4 rounded-lg bg-card border border-border/50 transition-all duration-200;
+  }
+  
+  .mobile-data-card:active {
+    @apply bg-secondary/30 border-primary/30;
+  }
+
+  /* Expandable row content */
+  .expandable-content {
+    @apply overflow-hidden transition-all duration-300 ease-out;
+  }
+
+  /* Circular progress indicator */
+  .circular-indicator {
+    @apply relative flex items-center justify-center;
+  }
+
+  /* Input focus state with accent */
+  .coach-input {
+    @apply bg-secondary border border-border rounded-lg px-4 py-3.5 md:py-3 text-foreground placeholder:text-muted-foreground transition-all duration-200;
+    @apply text-base md:text-sm; /* Larger text on mobile prevents zoom */
+  }
+  
+  .coach-input:focus {
+    @apply outline-none border-accent ring-1 ring-accent/30;
+    box-shadow: var(--glow-accent);
+  }
+
+  /* Ignition flow input glow */
+  .ignition-input-glow {
+    background: linear-gradient(
+      135deg,
+      hsl(156 100% 50% / 0.3) 0%,
+      hsl(156 100% 50% / 0.1) 25%,
+      hsl(175 100% 37% / 0.2) 50%,
+      hsl(156 100% 50% / 0.1) 75%,
+      hsl(156 100% 50% / 0.3) 100%
+    );
+    animation: ignitionGlow 4s ease-in-out infinite;
+  }
+
+  @keyframes ignitionGlow {
+    0%, 100% {
+      opacity: 0.6;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  /* Subtle scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/30;
+  }
+
+  /* Hide scrollbar on mobile for cleaner look */
+  @media (max-width: 767px) {
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 0px;
+      display: none;
+    }
+    
+    .custom-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  }
+
+  /* Matrix flowing gradient text */
+  .matrix-text-gradient {
+    background: linear-gradient(
+      90deg,
+      hsl(156 100% 50%) 0%,
+      hsl(150 80% 70%) 25%,
+      hsl(160 100% 45%) 50%,
+      hsl(140 60% 80%) 75%,
+      hsl(156 100% 50%) 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: matrixFlow 3s ease-in-out infinite;
+  }
+
+  /* Tiffany blue gradient text */
+  .tiffany-text-gradient {
+    background: linear-gradient(
+      135deg,
+      hsl(175 100% 37%) 0%,
+      hsl(180 80% 55%) 50%,
+      hsl(170 90% 45%) 100%
+    );
+    background-size: 150% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: tiffanyShimmer 2s ease-in-out infinite alternate;
+  }
+
+  /* Light mode - Darker gradient variants for better contrast on white backgrounds */
+  .light .matrix-text-gradient {
+    background: linear-gradient(
+      90deg,
+      hsl(156 100% 32%) 0%,
+      hsl(150 90% 28%) 25%,
+      hsl(160 100% 35%) 50%,
+      hsl(145 85% 30%) 75%,
+      hsl(156 100% 32%) 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: matrixFlow 3s ease-in-out infinite;
+  }
+
+  .light .tiffany-text-gradient {
+    background: linear-gradient(
+      135deg,
+      hsl(175 100% 28%) 0%,
+      hsl(180 90% 32%) 50%,
+      hsl(170 95% 30%) 100%
+    );
+    background-size: 150% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: tiffanyShimmer 2s ease-in-out infinite alternate;
+  }
+
+  /* Testimonial gradient text - matrix green to tiffany blue flowing */
+  .testimonial-gradient-text {
+    background: linear-gradient(
+      90deg,
+      hsl(156 100% 50%) 0%,
+      hsl(165 90% 45%) 20%,
+      hsl(175 100% 37%) 40%,
+      hsl(170 80% 50%) 60%,
+      hsl(160 90% 45%) 80%,
+      hsl(156 100% 50%) 100%
+    );
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: testimonialFlow 4s ease-in-out infinite;
+  }
+
+  /* Contact name gradient text - matrix green to tiffany blue */
+  .contact-name-gradient {
+    background: linear-gradient(
+      90deg,
+      hsl(156 100% 50%) 0%,
+      hsl(165 90% 45%) 25%,
+      hsl(175 100% 37%) 50%,
+      hsl(165 90% 45%) 75%,
+      hsl(156 100% 50%) 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: contactNameFlow 3s ease-in-out infinite;
+  }
+
+  @keyframes contactNameFlow {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+
+  /* Testimonial avatar glow */
+  .testimonial-avatar-glow {
+    box-shadow: 0 0 20px hsl(156 100% 50% / 0.2), 0 0 40px hsl(175 100% 37% / 0.1);
+  }
+
+  /* Active dot gradient */
+  .testimonial-dot-active {
+    background: linear-gradient(90deg, hsl(156 100% 50%), hsl(175 100% 37%));
+    box-shadow: 0 0 10px hsl(156 100% 50% / 0.5);
+  }
+
+  /* Mobile modal overlay */
+  .mobile-modal {
+    @apply fixed inset-0 z-50 flex items-end md:items-center justify-center;
+  }
+  
+  .mobile-modal-content {
+    @apply w-full md:w-[65vw] md:max-w-4xl max-h-[90vh] md:max-h-[85vh] rounded-t-2xl md:rounded-lg overflow-hidden;
+  }
+
+  /* Safe area padding for mobile devices with notches */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
+@layer utilities {
+  /* Gentle fade animation */
+  .animate-fade-in {
+    animation: fadeIn 0.4s ease-out forwards;
+  }
+
+  .animate-fade-in-up {
+    animation: fadeInUp 0.5s ease-out forwards;
+  }
+
+  .animate-slide-in-right {
+    animation: slideInRight 0.3s ease-out forwards;
+  }
+
+  /* Mobile slide up animation */
+  .animate-slide-in-up {
+    animation: slideInUp 0.3s ease-out forwards;
+  }
+
+  /* Staggered animation delays */
+  .delay-100 { animation-delay: 100ms; }
+  .delay-200 { animation-delay: 200ms; }
+  .delay-300 { animation-delay: 300ms; }
+  .delay-400 { animation-delay: 400ms; }
+
+  /* Soft glow on hover */
+  .hover-glow:hover {
+    box-shadow: var(--glow-primary);
+  }
+
+  /* Tap highlight for mobile */
+  .tap-highlight {
+    -webkit-tap-highlight-color: hsl(156 100% 50% / 0.1);
+  }
+
+  /* Hide on mobile/desktop utilities */
+  .mobile-only {
+    @apply block md:hidden;
+  }
+  
+  .desktop-only {
+    @apply hidden md:block;
+  }
+  
+  .mobile-flex {
+    @apply flex md:hidden;
+  }
+  
+  .desktop-flex {
+    @apply hidden md:flex;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes matrixFlow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes tiffanyShimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes testimonialFlow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes pulseSlow {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+/* System module story flow animations */
+.animate-pulse-slow {
+  animation: pulseSlow 6s ease-in-out infinite;
+}
+
+.system-module {
+  will-change: transform, opacity;
+}
+
+/* ===== LIGHT MODE COMPONENT OVERRIDES ===== */
+/* Premium light interface refinements for readability and depth */
+
+.light {
+  /* Cards & Panels - Clear boundaries with defined shadows */
+  .action-card,
+  .goal-card,
+  .strategy-column,
+  .mobile-data-card {
+    box-shadow: 0 1px 3px hsl(220 20% 10% / 0.08), 
+                0 2px 6px hsl(220 20% 10% / 0.05),
+                0 0 0 1px hsl(220 14% 85%);
+    border-color: hsl(220 14% 80%);
+  }
+  
+  .action-card:hover,
+  .mobile-data-card:active {
+    box-shadow: 0 4px 16px hsl(220 20% 10% / 0.1), 
+                0 2px 6px hsl(220 20% 10% / 0.06),
+                0 0 0 1px hsl(220 14% 78%);
+  }
+
+  /* Coach panel - Strongly separated with depth */
+  .coach-panel {
+    background: hsl(220 15% 93%);
+    border-left: 1px solid hsl(220 14% 82%);
+    box-shadow: inset 3px 0 15px hsl(220 20% 10% / 0.05);
+  }
+
+  /* Data rows - Clear alternating for scanability */
+  .data-row:nth-child(even) {
+    background: hsl(220 14% 94%);
+  }
+  
+  .data-row:hover {
+    background: hsl(220 14% 90%);
+  }
+
+  /* Table headers - Strong visual anchor */
+  th, [role="columnheader"] {
+    background: hsl(220 14% 92%);
+    color: hsl(220 20% 10%);
+    font-weight: 600;
+    border-bottom: 2px solid hsl(220 14% 82%);
+  }
+
+  /* Table cells - Clear text */
+  td, [role="cell"] {
+    color: hsl(220 20% 12%);
+    border-bottom: 1px solid hsl(220 14% 88%);
+  }
+
+  /* Input fields - Clear boundaries */
+  .coach-input {
+    background: hsl(0 0% 100%);
+    border-color: hsl(220 14% 78%);
+    color: hsl(220 20% 10%);
+  }
+  
+  .coach-input::placeholder {
+    color: hsl(220 12% 50%);
+  }
+  
+  .coach-input:focus {
+    background: hsl(0 0% 100%);
+    border-color: hsl(175 85% 28%);
+    box-shadow: 0 0 0 3px hsl(175 85% 28% / 0.1);
+  }
+
+  /* Awareness bar - Visible track with definition */
+  .awareness-bar {
+    background: hsl(220 14% 85%);
+    border: 1px solid hsl(220 14% 78%);
+  }
+
+  /* Buttons - Ensure contrast */
+  button, [role="button"] {
+    &:not([class*="ghost"]):not([class*="link"]) {
+      text-shadow: none;
+    }
+  }
+
+  /* Scrollbar - Visible and functional */
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: hsl(220 14% 92%);
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(220 14% 70%);
+    border-radius: 4px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(220 14% 55%);
+  }
+
+  /* Modal backdrop - Proper overlay */
+  .mobile-modal::before {
+    background: hsl(220 20% 10% / 0.35);
+  }
+
+  /* Navigation - Clear active states */
+  .nav-link {
+    color: hsl(220 15% 35%);
+  }
+  
+  .nav-link:hover {
+    color: hsl(220 20% 15%);
+  }
+  
+  .nav-link.active {
+    color: hsl(220 20% 8%);
+  }
+
+  /* Mobile nav - Strong contrast */
+  .mobile-nav-link {
+    color: hsl(220 15% 40%);
+  }
+  
+  .mobile-nav-link:hover {
+    color: hsl(220 20% 15%);
+  }
+
+  /* Badge/Tag elements */
+  .badge, [class*="badge"] {
+    border: 1px solid hsl(220 14% 80%);
+  }
+
+  /* Separator/Divider lines */
+  hr, [role="separator"] {
+    border-color: hsl(220 14% 82%);
+  }
+
+  /* Progress bars */
+  [role="progressbar"] {
+    background: hsl(220 14% 88%);
+  }
+
+  /* Skeleton loading states */
+  .skeleton, [class*="skeleton"] {
+    background: hsl(220 14% 88%);
+  }
+}
