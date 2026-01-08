@@ -8,6 +8,7 @@ import { DatabaseProvider } from "@/contexts/DatabaseContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { CalibrationProvider } from "@/contexts/CalibrationContext";
+import { CoachingEngineProvider } from "@/contexts/CoachingEngineContext";
 
 // Landing page
 import LandingPage from "./pages/LandingPage";
@@ -31,7 +32,8 @@ const App = () => (
     <ThemeProvider>
       <AuthProvider>
         <CalibrationProvider>
-          <TooltipProvider>
+          <CoachingEngineProvider>
+            <TooltipProvider>
             <DatabaseProvider>
               <Toaster />
               <Sonner />
@@ -62,6 +64,7 @@ const App = () => (
             </BrowserRouter>
             </DatabaseProvider>
           </TooltipProvider>
+          </CoachingEngineProvider>
         </CalibrationProvider>
       </AuthProvider>
     </ThemeProvider>

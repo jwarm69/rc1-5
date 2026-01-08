@@ -1,73 +1,148 @@
-# Welcome to your Lovable project
+# RealCoach.ai (RC1.5)
 
-## Project info
+AI-powered coaching platform for solo real estate agents. Provides calm, clear, friction-free daily guidance to help agents grow their business.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Features
 
-## How can I edit this code?
+- **AI Coaching Engine** - Intelligent coaching with mode-based conversations (Clarify, Reflect, Reframe, Commit, Direct)
+- **User Calibration** - 7-question onboarding to understand goals, constraints, and preferences
+- **Daily Actions** - Max 1 primary + 2 supporting actions per day (no overwhelm)
+- **Goals & Actions (G&A)** - Annual goals, monthly milestones, friction boundaries
+- **Business Plan** - Optional detailed business planning module
+- **Pipeline Management** - Contact and opportunity tracking
+- **No Urgency Design** - No streaks, timers, or guilt-inducing UI elements
 
-There are several ways of editing your application.
+## Tech Stack
 
-**Use Lovable**
+- **Framework**: React 18 + Vite
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS + shadcn-ui
+- **Backend**: Supabase (PostgreSQL + Auth)
+- **LLM**: Claude/OpenAI (configurable)
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+- Node.js 18+ (recommend using [nvm](https://github.com/nvm-sh/nvm))
+- npm or yarn
+- Supabase project (for production)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Installation
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
+```bash
+# Clone the repository
 git clone <YOUR_GIT_URL>
+cd RC1.5
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# Install dependencies
+npm install
 
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The app will be available at `http://localhost:8080` (or next available port).
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Environment Variables
 
-**Use GitHub Codespaces**
+Create a `.env` file in the root directory:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```env
+# Supabase (required for production)
+VITE_SUPABASE_URL=https://xxx.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJ...
 
-## What technologies are used for this project?
+# LLM Provider (choose one)
+VITE_LLM_PROVIDER=claude|openai
+VITE_ANTHROPIC_API_KEY=sk-ant-...
+VITE_OPENAI_API_KEY=sk-...
+```
 
-This project is built with:
+**Note**: The app works in development mode without API keys using mock responses.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Project Structure
 
-## How can I deploy this project?
+```
+/src
+├── components/          # React components
+│   ├── layout/          # MainLayout, Sidebar, CoachPanel
+│   ├── ui/              # shadcn-ui components
+│   ├── goals/           # GoalCard components
+│   └── actions/         # ActionCard components
+├── contexts/            # React contexts
+│   ├── CalibrationContext.tsx    # User calibration state
+│   ├── CoachingEngineContext.tsx # Coaching behavior state
+│   ├── AuthContext.tsx           # Supabase auth
+│   └── ThemeContext.tsx          # Dark/light mode
+├── lib/                 # Core business logic
+│   ├── calibration.ts            # Calibration state machine
+│   ├── coaching-engine.ts        # Coaching mode/move logic
+│   ├── daily-action-engine.ts    # Action selection
+│   └── llm/                      # LLM integration
+├── hooks/               # Custom React hooks
+├── pages/               # Route pages
+├── types/               # TypeScript types
+└── integrations/        # External service integrations
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+/docs
+└── behavior/            # AI behavior documentation (9 modules)
 
-## Can I connect a custom domain to my Lovable project?
+/supabase
+└── schema.sql           # Database schema
+```
 
-Yes, you can!
+## Development Commands
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+```bash
+npm install       # Install dependencies
+npm run dev       # Start dev server
+npm run build     # Production build
+npm run lint      # Run ESLint
+npx tsc --noEmit  # Type check
+```
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## Database Setup
+
+1. Create a new Supabase project at [supabase.com](https://supabase.com)
+2. Go to SQL Editor
+3. Paste contents of `/supabase/schema.sql`
+4. Run the SQL to create tables and policies
+5. Copy your project URL and anon key to `.env`
+
+## Architecture Overview
+
+### User Flow
+```
+UNINITIALIZED → CALIBRATING → G&A_DRAFTED → G&A_CONFIRMED → ACTIONS_ACTIVE
+```
+
+### Coaching Modes
+```
+CLARIFY → REFLECT → REFRAME → COMMIT → DIRECT
+```
+
+### Core Systems
+
+1. **Calibration System** - 7 G&A questions, Fast Lane protocol for impatient users
+2. **Coaching Engine** - Mode transitions, coaching moves (Focus, Agency, Identity, Ease)
+3. **Daily Action Engine** - Max 1 primary + 2 supporting, no backlogs
+4. **LLM Integration** - Provider-agnostic, enforces coaching rules
+
+## Non-Negotiable Behavior Rules
+
+These rules are enforced at the coaching engine level:
+
+1. **One question at a time** - Never ask >1 question per response
+2. **Reflect → Confirm → Proceed** - Always verify understanding first
+3. **No daily actions before G&A confirmation** - Hard gate
+4. **No urgency ever rendered** - No timers, streaks, overdue labels
+5. **Banned words**: crush, hustle, grind, empower, synergy, game-changer
+
+## Contributing
+
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for internal development guidelines.
+
+## License
+
+Proprietary - All rights reserved.
