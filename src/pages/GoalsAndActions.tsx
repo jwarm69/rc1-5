@@ -1,13 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { GoalCard } from "@/components/goals/GoalCard";
 import { ActionCard } from "@/components/actions/ActionCard";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { ChevronDown, ChevronUp, Target, Sparkles, MessageCircle } from "lucide-react";
+import { ChevronDown, ChevronUp, Target, Sparkles, MessageCircle, Star } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCalibration } from "@/contexts/CalibrationContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
+import { generateDailyPlan, type DailyActionPlan } from "@/lib/daily-action-engine";
 
 interface Action {
   id: string;
@@ -67,6 +68,9 @@ export default function GoalsAndActions() {
   const [isLoading, setIsLoading] = useState(false);
   const isMobile = useIsMobile();
 
+  // Daily action plan from engine (Stream 3)
+  const [actionPlan, setActionPlan] = useState<DailyActionPlan | null>(null);
+
   // Determine if we should show calibration UI or actions
   const showCalibrationUI = calibration.isCalibrating || calibration.state.userState === 'G&A_DRAFTED';
   const canShowActions = calibration.canShowActions;
@@ -81,6 +85,48 @@ export default function GoalsAndActions() {
       setCompleted(demoCompletedActions);
     }
   }, [user]);
+
+  // Generate daily action plan from engine when G&A is confirmed (Stream 3)
+  useEffect(() => {
+    if (canShowActions && calibration.state.goalsAndActions) {
+      const plan = generateDailyPlan(
+        calibration.state.goalsAndActions,
+        null, // businessPlan (not yet implemented)
+        [],   // pipeline (empty for now, will come from Supabase)
+        { type: 'NONE', description: '', mayOverridePrimary: false },
+        false // reducedLoad
+      );
+      setActionPlan(plan);
+
+      // Convert plan to Action[] format for existing UI compatibility
+      const engineActions: Action[] = [];
+
+      if (plan.primary) {
+        engineActions.push({
+          id: plan.primary.id,
+          title: plan.primary.title,
+          description: plan.primary.description,
+          priority: 'high',
+          completed: false,
+        });
+      }
+
+      plan.supporting.forEach(action => {
+        engineActions.push({
+          id: action.id,
+          title: action.title,
+          description: action.description,
+          priority: 'medium',
+          completed: false,
+        });
+      });
+
+      // Only use engine actions if we have them, otherwise keep demo
+      if (engineActions.length > 0) {
+        setActions(engineActions);
+      }
+    }
+  }, [canShowActions, calibration.state.goalsAndActions]);
 
   const fetchActions = async () => {
     if (!user) return;
@@ -308,29 +354,100 @@ export default function GoalsAndActions() {
             )}
           </div>
 
-          {/* Today's Actions */}
-          <div>
-            <h2 className="text-xs font-medium text-foreground uppercase tracking-wider mb-3">
-              Today's Actions
-            </h2>
-            <div className="space-y-3">
-              {actions.slice(0, 3).map((action, index) => (
-                <div 
-                  key={action.id} 
-                  className="animate-fade-in-up"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
+          {/* Today's Actions (Stream 3 - Primary + Supporting) */}
+          <div className="space-y-6">
+            {/* Primary Action - Today's Focus */}
+            {actionPlan?.primary ? (
+              <div>
+                <h2 className="text-xs font-medium text-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Star className="w-3 h-3 text-primary" />
+                  Today's Focus
+                </h2>
+                <div className="animate-fade-in-up">
                   <ActionCard
-                    title={action.title}
-                    description={action.description}
-                    priority={action.priority}
-                    completed={action.completed}
-                    onComplete={() => handleComplete(action.id)}
+                    title={actionPlan.primary.title}
+                    description={actionPlan.primary.description}
+                    priority="high"
+                    completed={false}
+                    onComplete={() => handleComplete(actionPlan.primary!.id)}
                     compact
                   />
+                  <p className="text-xs text-muted-foreground mt-2 ml-1">
+                    {actionPlan.primary.milestoneConnection}
+                  </p>
                 </div>
-              ))}
-            </div>
+              </div>
+            ) : (
+              <div>
+                <h2 className="text-xs font-medium text-foreground uppercase tracking-wider mb-3">
+                  Today's Actions
+                </h2>
+                <div className="space-y-3">
+                  {actions.slice(0, 1).map((action, index) => (
+                    <div
+                      key={action.id}
+                      className="animate-fade-in-up"
+                      style={{ animationDelay: `${index * 100}ms` }}
+                    >
+                      <ActionCard
+                        title={action.title}
+                        description={action.description}
+                        priority={action.priority}
+                        completed={action.completed}
+                        onComplete={() => handleComplete(action.id)}
+                        compact
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Supporting Actions - If Time Allows */}
+            {actionPlan?.supporting && actionPlan.supporting.length > 0 ? (
+              <div>
+                <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+                  If Time Allows
+                </h2>
+                <div className="space-y-2">
+                  {actionPlan.supporting.map((action, index) => (
+                    <div
+                      key={action.id}
+                      className="animate-fade-in-up"
+                      style={{ animationDelay: `${(index + 1) * 100}ms` }}
+                    >
+                      <ActionCard
+                        title={action.title}
+                        description={action.description}
+                        priority="medium"
+                        completed={false}
+                        onComplete={() => handleComplete(action.id)}
+                        compact
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : !actionPlan && (
+              <div className="space-y-3">
+                {actions.slice(1, 3).map((action, index) => (
+                  <div
+                    key={action.id}
+                    className="animate-fade-in-up"
+                    style={{ animationDelay: `${(index + 1) * 100}ms` }}
+                  >
+                    <ActionCard
+                      title={action.title}
+                      description={action.description}
+                      priority={action.priority}
+                      completed={action.completed}
+                      onComplete={() => handleComplete(action.id)}
+                      compact
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Completed Actions */}
@@ -405,30 +522,96 @@ export default function GoalsAndActions() {
             </div>
           </div>
 
-          {/* Right column - Actions (behavior) */}
-          <div className="col-span-8">
-            <h2 className="text-xs font-medium text-foreground uppercase tracking-wider mb-3">
-              Today's Actions
-            </h2>
-            
-            {/* Active actions - only 3 visible */}
-            <div className="space-y-3 mb-8">
-              {actions.slice(0, 3).map((action, index) => (
-                <div 
-                  key={action.id} 
-                  className="animate-fade-in-up"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
+          {/* Right column - Actions (behavior) (Stream 3) */}
+          <div className="col-span-8 space-y-8">
+            {/* Primary Action - Today's Focus */}
+            {actionPlan?.primary ? (
+              <div>
+                <h2 className="text-xs font-medium text-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Star className="w-3 h-3 text-primary" />
+                  Today's Focus
+                </h2>
+                <div className="animate-fade-in-up">
                   <ActionCard
-                    title={action.title}
-                    description={action.description}
-                    priority={action.priority}
-                    completed={action.completed}
-                    onComplete={() => handleComplete(action.id)}
+                    title={actionPlan.primary.title}
+                    description={actionPlan.primary.description}
+                    priority="high"
+                    completed={false}
+                    onComplete={() => handleComplete(actionPlan.primary!.id)}
                   />
+                  <p className="text-sm text-muted-foreground mt-3 ml-1">
+                    {actionPlan.primary.milestoneConnection}
+                  </p>
                 </div>
-              ))}
-            </div>
+              </div>
+            ) : (
+              <div>
+                <h2 className="text-xs font-medium text-foreground uppercase tracking-wider mb-3">
+                  Today's Actions
+                </h2>
+                <div className="space-y-3">
+                  {actions.slice(0, 1).map((action, index) => (
+                    <div
+                      key={action.id}
+                      className="animate-fade-in-up"
+                      style={{ animationDelay: `${index * 100}ms` }}
+                    >
+                      <ActionCard
+                        title={action.title}
+                        description={action.description}
+                        priority={action.priority}
+                        completed={action.completed}
+                        onComplete={() => handleComplete(action.id)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Supporting Actions - If Time Allows */}
+            {actionPlan?.supporting && actionPlan.supporting.length > 0 ? (
+              <div>
+                <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+                  If Time Allows
+                </h2>
+                <div className="space-y-3">
+                  {actionPlan.supporting.map((action, index) => (
+                    <div
+                      key={action.id}
+                      className="animate-fade-in-up"
+                      style={{ animationDelay: `${(index + 1) * 100}ms` }}
+                    >
+                      <ActionCard
+                        title={action.title}
+                        description={action.description}
+                        priority="medium"
+                        completed={false}
+                        onComplete={() => handleComplete(action.id)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : !actionPlan && (
+              <div className="space-y-3">
+                {actions.slice(1, 3).map((action, index) => (
+                  <div
+                    key={action.id}
+                    className="animate-fade-in-up"
+                    style={{ animationDelay: `${(index + 1) * 100}ms` }}
+                  >
+                    <ActionCard
+                      title={action.title}
+                      description={action.description}
+                      priority={action.priority}
+                      completed={action.completed}
+                      onComplete={() => handleComplete(action.id)}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Completed actions */}
             {completed.length > 0 && (

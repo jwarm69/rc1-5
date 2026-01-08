@@ -4,8 +4,11 @@ import { SupportFormModal } from "./SupportFormModal";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCalibration } from "@/contexts/CalibrationContext";
+import { useCoachingEngine } from "@/contexts/CoachingEngineContext";
+import { getLLMClient } from "@/lib/llm";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 
 type ActionType = "update-opportunity" | "add-note" | "schedule-meeting" | "provide-actions" | "screenshot-context" | null;
 type ScreenshotActionType = "update-stage" | "update-notes" | "draft-email" | "schedule-actions" | "add-note" | null;
@@ -102,7 +105,9 @@ interface CoachPanelProps {
 export function CoachPanel({ isMobile = false }: CoachPanelProps) {
   const { user } = useAuth();
   const calibration = useCalibration();
+  const engine = useCoachingEngine();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isGeneratingResponse, setIsGeneratingResponse] = useState(false);
   const [input, setInput] = useState("");
   const [supportOpen, setSupportOpen] = useState(false);
   const [activeAction, setActiveAction] = useState<ActionType>(null);
@@ -754,24 +759,66 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
     if (activeAction && currentStepData) {
       await handleStepSubmit();
     } else if (!activeAction && input.trim()) {
+      const userInput = input;
       const newMessage: Message = {
         id: Date.now().toString(),
         role: "user",
-        content: input,
+        content: userInput,
       };
       setMessages(prev => [...prev, newMessage]);
       await saveMessage(newMessage);
       setInput("");
 
-      setTimeout(async () => {
+      // Generate LLM response
+      setIsGeneratingResponse(true);
+      try {
+        const client = getLLMClient();
+
+        // Build recent messages for context
+        const recentMessages = messages.slice(-10).map(m => ({
+          role: m.role === 'coach' ? 'assistant' as const : 'user' as const,
+          content: m.content,
+        }));
+
+        const response = await client.generateCoachingResponse(userInput, {
+          currentMode: engine.getCurrentMode(),
+          currentMove: engine.getCurrentMove(),
+          userTone: calibration.state.tone || undefined,
+          goalsAndActions: calibration.state.goalsAndActions || undefined,
+          recentMessages,
+          missedDayDetected: engine.hasMissedDay,
+        });
+
         const coachResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "coach",
+          content: response.message,
+        };
+        setMessages(prev => [...prev, coachResponse]);
+        await saveMessage(coachResponse);
+
+        // Update engine state if mode/move suggested
+        if (response.suggestedMode) {
+          engine.transitionTo(response.suggestedMode);
+        }
+
+        // Log policy violations for debugging
+        if (response.policyViolations && response.policyViolations.length > 0) {
+          console.warn('Coaching policy violations:', response.policyViolations);
+        }
+      } catch (error) {
+        console.error('LLM error:', error);
+        // Fallback to "Noted." on error
+        const fallback: Message = {
           id: (Date.now() + 1).toString(),
           role: "coach",
           content: "Noted.",
         };
-        setMessages(prev => [...prev, coachResponse]);
-        await saveMessage(coachResponse);
-      }, 800);
+        setMessages(prev => [...prev, fallback]);
+        await saveMessage(fallback);
+      } finally {
+        setIsGeneratingResponse(false);
+      }
     }
   };
 
@@ -1046,14 +1093,102 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
             </div>
           )}
 
-          {/* Calibration progress indicator (mobile) */}
+          {/* Calibration progress indicator with step counter (mobile - Stream 2) */}
           {calibration.isCalibrating && calibration.state.tone && (
             <div className="space-y-2 animate-fade-in">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>Calibration Progress</span>
+                <span>
+                  {calibration.currentQuestion
+                    ? `Question ${(calibration.state.currentQuestionIndex || 0) + 1} of 7`
+                    : 'Calibration Progress'}
+                </span>
                 <span>{calibration.progress}%</span>
               </div>
               <Progress value={calibration.progress} className="h-1.5" />
+              {/* Skip button during calibration questions (mobile - Stream 2) */}
+              {calibration.currentQuestion && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => calibration.skipQuestion?.()}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <SkipForward className="w-3 h-3 mr-1" />
+                  Skip this question
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Missed-day choice UI (mobile - Stream 4) */}
+          {engine.needsMissedDayChoice && (
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg animate-fade-in">
+              <p className="text-sm text-amber-800 dark:text-amber-200 mb-3">
+                Looks like yesterday didn't go as planned.
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => engine.handleMissedDayChoice('UNPACK')}
+                  className="text-xs"
+                >
+                  Let's talk about it
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => engine.handleMissedDayChoice('SKIP')}
+                  className="text-xs"
+                >
+                  Move on
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* G&A Draft Confirm/Edit buttons (mobile - Stream 2) */}
+          {calibration.state.userState === 'G&A_DRAFTED' && (
+            <div className="flex gap-2 animate-fade-in">
+              <Button
+                onClick={() => calibration.confirmGoalsAndActions()}
+                className="flex-1"
+              >
+                <Check className="w-4 h-4 mr-2" />
+                Confirm
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const editMsg: Message = {
+                    id: Date.now().toString(),
+                    role: 'user',
+                    content: 'I want to edit something',
+                  };
+                  setMessages(prev => [...prev, editMsg]);
+                  setTimeout(() => {
+                    const askMsg: Message = {
+                      id: (Date.now() + 1).toString(),
+                      role: 'coach',
+                      content: 'What would you like to change?',
+                    };
+                    setMessages(prev => [...prev, askMsg]);
+                  }, 500);
+                }}
+                className="flex-1"
+              >
+                Edit
+              </Button>
+            </div>
+          )}
+
+          {/* LLM generating response indicator (mobile) */}
+          {isGeneratingResponse && (
+            <div className="space-y-2 animate-fade-in">
+              <span className="text-xs text-primary font-medium">RealCoach</span>
+              <div className="flex items-center gap-2 text-base text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Thinking...</span>
+              </div>
             </div>
           )}
 
@@ -1185,17 +1320,32 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
         <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
         
         <div className="relative p-5 border-b border-primary/10">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <div className="absolute inset-0 bg-primary/30 blur-md rounded-lg" />
-              <div className="relative w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20">
-                <Sparkles className="w-5 h-5 text-primary" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <div className="absolute inset-0 bg-primary/30 blur-md rounded-lg" />
+                <div className="relative w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20">
+                  <Sparkles className="w-5 h-5 text-primary" />
+                </div>
+              </div>
+              <div>
+                <h3 className="text-base font-medium text-foreground">RealCoach</h3>
+                <p className="text-xs text-muted-foreground">Assistant</p>
               </div>
             </div>
-            <div>
-              <h3 className="text-base font-medium text-foreground">RealCoach</h3>
-              <p className="text-xs text-muted-foreground">Assistant</p>
-            </div>
+            {/* Mode indicator (Stream 4) */}
+            {calibration.canShowActions && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                  {engine.isInDirectMode ? 'Direct' : engine.getCurrentMode()}
+                </span>
+                {engine.getCurrentMove() !== 'NONE' && (
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-secondary text-secondary-foreground">
+                    {engine.getCurrentMove()}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1321,14 +1471,102 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
             </div>
           )}
 
-          {/* Calibration progress indicator */}
+          {/* Calibration progress indicator with step counter (Stream 2) */}
           {calibration.isCalibrating && calibration.state.tone && (
             <div className="space-y-2 animate-fade-in">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>Calibration Progress</span>
+                <span>
+                  {calibration.currentQuestion
+                    ? `Question ${(calibration.state.currentQuestionIndex || 0) + 1} of 7`
+                    : 'Calibration Progress'}
+                </span>
                 <span>{calibration.progress}%</span>
               </div>
               <Progress value={calibration.progress} className="h-1" />
+              {/* Skip button during calibration questions (Stream 2) */}
+              {calibration.currentQuestion && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => calibration.skipQuestion?.()}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <SkipForward className="w-3 h-3 mr-1" />
+                  Skip this question
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Missed-day choice UI (Stream 4) */}
+          {engine.needsMissedDayChoice && (
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg animate-fade-in">
+              <p className="text-sm text-amber-800 dark:text-amber-200 mb-3">
+                Looks like yesterday didn't go as planned.
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => engine.handleMissedDayChoice('UNPACK')}
+                  className="text-xs"
+                >
+                  Let's talk about it
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => engine.handleMissedDayChoice('SKIP')}
+                  className="text-xs"
+                >
+                  Move on
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* G&A Draft Confirm/Edit buttons (Stream 2) */}
+          {calibration.state.userState === 'G&A_DRAFTED' && (
+            <div className="flex gap-2 animate-fade-in">
+              <Button
+                onClick={() => calibration.confirmGoalsAndActions()}
+                className="flex-1"
+              >
+                <Check className="w-4 h-4 mr-2" />
+                Confirm
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const editMsg: Message = {
+                    id: Date.now().toString(),
+                    role: 'user',
+                    content: 'I want to edit something',
+                  };
+                  setMessages(prev => [...prev, editMsg]);
+                  setTimeout(() => {
+                    const askMsg: Message = {
+                      id: (Date.now() + 1).toString(),
+                      role: 'coach',
+                      content: 'What would you like to change?',
+                    };
+                    setMessages(prev => [...prev, askMsg]);
+                  }, 500);
+                }}
+                className="flex-1"
+              >
+                Edit
+              </Button>
+            </div>
+          )}
+
+          {/* LLM generating response indicator (desktop) */}
+          {isGeneratingResponse && (
+            <div className="space-y-2 animate-fade-in">
+              <span className="text-xs text-primary font-medium">RealCoach</span>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Thinking...</span>
+              </div>
             </div>
           )}
 
