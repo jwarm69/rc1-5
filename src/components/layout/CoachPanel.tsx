@@ -267,6 +267,68 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
     });
   };
 
+  // Handle missed-day choice and generate appropriate LLM response
+  const handleMissedDayChoiceWithResponse = async (choice: 'UNPACK' | 'SKIP') => {
+    engine.handleMissedDayChoice(choice);
+
+    // Add user message indicating choice
+    const choiceText = choice === 'UNPACK'
+      ? "Let's talk about what happened yesterday."
+      : "Let's skip that and move forward.";
+
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: choiceText,
+    };
+    setMessages(prev => [...prev, userMsg]);
+    await saveMessage(userMsg);
+
+    // Generate LLM response
+    setIsGeneratingResponse(true);
+    try {
+      const client = getLLMClient();
+      const recentMessages = messages.slice(-10).map(m => ({
+        role: m.role === 'coach' ? 'assistant' as const : 'user' as const,
+        content: m.content,
+      }));
+
+      const response = await client.generateCoachingResponse(choiceText, {
+        currentMode: engine.getCurrentMode(),
+        currentMove: engine.getCurrentMove(),
+        tone: calibration.state.tone || null,
+        goalsAndActions: calibration.state.goalsAndActions || null,
+        businessPlan: calibration.state.businessPlan || null,
+        recentMessages,
+      });
+
+      const coachResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "coach",
+        content: response.message,
+      };
+      setMessages(prev => [...prev, coachResponse]);
+      await saveMessage(coachResponse);
+
+      if (response.suggestedMode) {
+        engine.transitionTo(response.suggestedMode);
+      }
+    } catch (error) {
+      console.error('LLM error:', error);
+      const fallback: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "coach",
+        content: choice === 'UNPACK'
+          ? "What got in the way yesterday?"
+          : "Let's focus on what's possible today.",
+      };
+      setMessages(prev => [...prev, fallback]);
+      await saveMessage(fallback);
+    } finally {
+      setIsGeneratingResponse(false);
+    }
+  };
+
   const handleActionSelect = async (actionId: ActionType) => {
     setActiveAction(actionId);
     setCurrentStep(0);
@@ -769,6 +831,15 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
       await saveMessage(newMessage);
       setInput("");
 
+      // Process message through coaching engine for signal detection
+      engine.processMessage(userInput);
+      engine.detectAndSetMove(userInput);
+
+      // If missed day detected, wait for user choice before proceeding
+      if (engine.needsMissedDayChoice) {
+        return;
+      }
+
       // Generate LLM response
       setIsGeneratingResponse(true);
       try {
@@ -783,10 +854,10 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
         const response = await client.generateCoachingResponse(userInput, {
           currentMode: engine.getCurrentMode(),
           currentMove: engine.getCurrentMove(),
-          userTone: calibration.state.tone || undefined,
-          goalsAndActions: calibration.state.goalsAndActions || undefined,
+          tone: calibration.state.tone || null,
+          goalsAndActions: calibration.state.goalsAndActions || null,
+          businessPlan: calibration.state.businessPlan || null,
           recentMessages,
-          missedDayDetected: engine.hasMissedDay,
         });
 
         const coachResponse: Message = {
@@ -1129,7 +1200,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
               <div className="flex gap-2">
                 <Button
                   size="sm"
-                  onClick={() => engine.handleMissedDayChoice('UNPACK')}
+                  onClick={() => handleMissedDayChoiceWithResponse('UNPACK')}
                   className="text-xs"
                 >
                   Let's talk about it
@@ -1137,7 +1208,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => engine.handleMissedDayChoice('SKIP')}
+                  onClick={() => handleMissedDayChoiceWithResponse('SKIP')}
                   className="text-xs"
                 >
                   Move on
@@ -1507,7 +1578,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
               <div className="flex gap-2">
                 <Button
                   size="sm"
-                  onClick={() => engine.handleMissedDayChoice('UNPACK')}
+                  onClick={() => handleMissedDayChoiceWithResponse('UNPACK')}
                   className="text-xs"
                 >
                   Let's talk about it
@@ -1515,7 +1586,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => engine.handleMissedDayChoice('SKIP')}
+                  onClick={() => handleMissedDayChoiceWithResponse('SKIP')}
                   className="text-xs"
                 >
                   Move on
