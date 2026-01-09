@@ -3,9 +3,11 @@ import { AwarenessBar } from "@/components/pipeline/AwarenessBar";
 import { PipelineContactModal } from "@/components/pipeline/PipelineContactModal";
 import { useDatabaseContext } from "@/contexts/DatabaseContext";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Search, X, Filter } from "lucide-react";
+import { Search, X, Filter, Loader2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -28,6 +30,7 @@ interface PipelineLead {
   address?: string;
   notes?: { date: string; content: string }[];
   pipelineStage?: number;
+  isDemo?: boolean;
 }
 
 const PIPELINE_STATUSES = [
@@ -39,13 +42,13 @@ const PIPELINE_STATUSES = [
   "Closed",
 ];
 
-const initialPipelineData: PipelineLead[] = [
-  { id: "1", name: "Sarah Mitchell", dealAmount: 450000, gci: 13500, estClose: "Feb 2025", status: "Showing", dealType: "Buy", source: "Referral", phone: "(555) 234-5678", email: "sarah.m@email.com", address: "456 Maple Ave, Springfield, IL 62705", pipelineStage: 3, notes: [{ date: "Jan 8", content: "Met at open house on Elm Street. Interested in 3BR homes under $350k." }] },
-  { id: "2", name: "James & Lisa Henderson", dealAmount: 725000, gci: 21750, estClose: "Mar 2025", status: "Under Contract", dealType: "Buy", source: "SOI", phone: "(555) 345-6789", email: "henderson.family@email.com", address: "789 Pine Road, Springfield, IL 62706", pipelineStage: 5, notes: [{ date: "Jan 10", content: "Offer accepted! Moving to inspection phase." }, { date: "Jan 5", content: "Submitted offer on Colonial at 789 Pine Road." }] },
-  { id: "3", name: "Michael Roberts", dealAmount: 380000, gci: 11400, estClose: "Feb 2025", status: "Follow Up", dealType: "Sell", source: "Expired", phone: "(555) 456-7890", email: "m.roberts@email.com", pipelineStage: 1, notes: [{ date: "Jan 5", content: "Listing expired after 90 days. Open to re-listing with new approach." }] },
-  { id: "4", name: "Jennifer Wu", dealAmount: 520000, gci: 15600, estClose: "Apr 2025", status: "Initial Contact", dealType: "Buy", source: "Open House", phone: "(555) 567-8901", email: "jennifer.wu@email.com", pipelineStage: 0 },
-  { id: "5", name: "David & Amy Chen", dealAmount: 675000, gci: 20250, estClose: "Mar 2025", status: "Showing", dealType: "Buy", source: "Referral", phone: "(555) 678-9012", email: "chen.family@email.com", address: "321 Oak Lane, Springfield, IL 62707", pipelineStage: 3, notes: [{ date: "Jan 9", content: "Showed 3 properties. Very interested in the Colonial on Oak Lane." }] },
-  { id: "6", name: "Robert Johnson", dealAmount: 295000, gci: 8850, estClose: "Feb 2025", status: "Offer Submitted", dealType: "Sell", source: "Past Client", phone: "(555) 789-0123", email: "r.johnson@email.com", pipelineStage: 4, notes: [{ date: "Jan 7", content: "Received offer. Reviewing with seller." }] },
+const demoPipelineData: PipelineLead[] = [
+  { id: "demo-1", name: "Sarah Mitchell", dealAmount: 450000, gci: 13500, estClose: "Feb 2025", status: "Showing", dealType: "Buy", source: "Referral", phone: "(555) 234-5678", email: "sarah.m@email.com", address: "456 Maple Ave, Springfield, IL 62705", pipelineStage: 3, isDemo: true, notes: [{ date: "Jan 8", content: "Met at open house on Elm Street. Interested in 3BR homes under $350k." }] },
+  { id: "demo-2", name: "James & Lisa Henderson", dealAmount: 725000, gci: 21750, estClose: "Mar 2025", status: "Under Contract", dealType: "Buy", source: "SOI", phone: "(555) 345-6789", email: "henderson.family@email.com", address: "789 Pine Road, Springfield, IL 62706", pipelineStage: 5, isDemo: true, notes: [{ date: "Jan 10", content: "Offer accepted! Moving to inspection phase." }, { date: "Jan 5", content: "Submitted offer on Colonial at 789 Pine Road." }] },
+  { id: "demo-3", name: "Michael Roberts", dealAmount: 380000, gci: 11400, estClose: "Feb 2025", status: "Follow Up", dealType: "Sell", source: "Expired", phone: "(555) 456-7890", email: "m.roberts@email.com", pipelineStage: 1, isDemo: true, notes: [{ date: "Jan 5", content: "Listing expired after 90 days. Open to re-listing with new approach." }] },
+  { id: "demo-4", name: "Jennifer Wu", dealAmount: 520000, gci: 15600, estClose: "Apr 2025", status: "Initial Contact", dealType: "Buy", source: "Open House", phone: "(555) 567-8901", email: "jennifer.wu@email.com", pipelineStage: 0, isDemo: true },
+  { id: "demo-5", name: "David & Amy Chen", dealAmount: 675000, gci: 20250, estClose: "Mar 2025", status: "Showing", dealType: "Buy", source: "Referral", phone: "(555) 678-9012", email: "chen.family@email.com", address: "321 Oak Lane, Springfield, IL 62707", pipelineStage: 3, isDemo: true, notes: [{ date: "Jan 9", content: "Showed 3 properties. Very interested in the Colonial on Oak Lane." }] },
+  { id: "demo-6", name: "Robert Johnson", dealAmount: 295000, gci: 8850, estClose: "Feb 2025", status: "Offer Submitted", dealType: "Sell", source: "Past Client", phone: "(555) 789-0123", email: "r.johnson@email.com", pipelineStage: 4, isDemo: true, notes: [{ date: "Jan 7", content: "Received offer. Reviewing with seller." }] },
 ];
 
 function formatCurrency(amount: number) {
@@ -67,14 +70,71 @@ const statusColors: Record<string, string> = {
 };
 
 export default function Pipeline() {
-  const [pipelineData, setPipelineData] = useState<PipelineLead[]>(initialPipelineData);
+  const { user } = useAuth();
+  const [pipelineData, setPipelineData] = useState<PipelineLead[]>(demoPipelineData);
   const [selectedLead, setSelectedLead] = useState<PipelineLead | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [stageFilter, setStageFilter] = useState<string>("all");
+  const [isLoading, setIsLoading] = useState(false);
   const { setIsContactOpen } = useDatabaseContext();
   const isMobile = useIsMobile();
+
+  // Helper to check if a lead is demo data
+  const isDemoLead = (id: string) => id.startsWith("demo-");
+
+  // Fetch opportunities from Supabase
+  const fetchOpportunities = async () => {
+    if (!user) {
+      setPipelineData(demoPipelineData);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("opportunities")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching opportunities:", error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const formattedOpportunities: PipelineLead[] = data.map((o) => ({
+          id: o.id,
+          name: o.contact_name,
+          dealAmount: o.deal_amount || 0,
+          gci: (o.deal_amount || 0) * 0.03, // 3% GCI estimate
+          estClose: o.expected_close_date
+            ? new Date(o.expected_close_date).toLocaleDateString("en-US", { month: "short", year: "numeric" })
+            : "TBD",
+          status: o.status || "Initial Contact",
+          dealType: "Buy" as const, // Default, could be stored in DB
+          source: "Database",
+          notes: o.notes ? [{ date: new Date(o.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }), content: o.notes }] : undefined,
+          isDemo: false,
+        }));
+        // Combine real data with demo data
+        setPipelineData([...formattedOpportunities, ...demoPipelineData]);
+      } else {
+        // No real data yet, show demo data
+        setPipelineData(demoPipelineData);
+      }
+    } catch (error) {
+      console.error("Error fetching opportunities:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch data on mount and when user changes
+  useEffect(() => {
+    fetchOpportunities();
+  }, [user]);
 
   const filteredPipelineData = pipelineData.filter((lead) => {
     // Stage filter
@@ -115,12 +175,32 @@ export default function Pipeline() {
     setSelectedIds(newSelected);
   };
 
-  const handleStatusChange = (leadId: string, newStatus: string) => {
-    setPipelineData(prev => 
-      prev.map(lead => 
+  const handleStatusChange = async (leadId: string, newStatus: string) => {
+    // Optimistic update
+    setPipelineData(prev =>
+      prev.map(lead =>
         lead.id === leadId ? { ...lead, status: newStatus } : lead
       )
     );
+
+    // Only persist to Supabase for non-demo leads
+    if (!isDemoLead(leadId) && user) {
+      try {
+        const { error } = await supabase
+          .from("opportunities")
+          .update({ status: newStatus, updated_at: new Date().toISOString() })
+          .eq("id", leadId);
+
+        if (error) {
+          console.error("Error updating opportunity status:", error);
+          // Revert on error
+          fetchOpportunities();
+        }
+      } catch (error) {
+        console.error("Error updating opportunity status:", error);
+        fetchOpportunities();
+      }
+    }
   };
 
   useEffect(() => {
@@ -264,7 +344,11 @@ export default function Pipeline() {
       )}
 
       {/* Pipeline Content */}
-      {isMobile ? (
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : isMobile ? (
         /* Mobile: Stacked cards with checkboxes */
         <div className="space-y-3">
           {filteredPipelineData.map((lead, index) => (
