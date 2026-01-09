@@ -126,5 +126,6 @@ export class LLMError extends Error {
 export interface LLMAdapter {
   provider: LLMProvider;
   generate(request: LLMRequest): Promise<LLMResponse>;
+  generateStream?(request: LLMRequest): AsyncGenerator<string, void, unknown>;
   validateConfig(): boolean;
 }

@@ -105,8 +105,11 @@ export class LLMClient {
       return { adapter: this.claudeAdapter, model: 'claude-sonnet-4-20250514' };
     }
     if (this.openaiAdapter) {
-      console.log(`[LLM Router] Falling back to OpenAI for ${taskType}`);
-      return { adapter: this.openaiAdapter, model: 'gpt-4o-mini' };
+      // Use gpt-4o for quality tasks (coaching, calibration, vision), gpt-4o-mini for cost-optimized tasks
+      const qualityTasks: TaskType[] = ['COACHING', 'CALIBRATION', 'VISION'];
+      const fallbackModel = qualityTasks.includes(taskType) ? 'gpt-4o' : 'gpt-4o-mini';
+      console.log(`[LLM Router] Falling back to OpenAI (${fallbackModel}) for ${taskType}`);
+      return { adapter: this.openaiAdapter, model: fallbackModel };
     }
 
     return null;
@@ -117,6 +120,17 @@ export class LLMClient {
    */
   isConfigured(): boolean {
     return !!(this.claudeAdapter || this.openaiAdapter);
+  }
+
+  /**
+   * Get detailed configuration status for debugging/UI
+   */
+  getConfigStatus(): { claude: boolean; openai: boolean; primary: LLMProvider | null } {
+    return {
+      claude: !!this.claudeAdapter,
+      openai: !!this.openaiAdapter,
+      primary: this.claudeAdapter ? 'claude' : this.openaiAdapter ? 'openai' : null,
+    };
   }
 
   /**
@@ -172,6 +186,68 @@ export class LLMClient {
     return {
       message: response.content,
       suggestedMode: this.inferNextMode(userMessage, response.content, context),
+      suggestedMove: this.detectCoachingMove(userMessage),
+      detectedSignals: this.detectSignals(userMessage),
+      questionsAsked: validation.questionCount,
+      policyViolations: validation.violations,
+    };
+  }
+
+  /**
+   * Generate a streaming coaching response with context and rules enforcement
+   * Yields chunks as they arrive, then returns full response metadata at the end
+   */
+  async *generateCoachingResponseStream(
+    userMessage: string,
+    context: CoachingContext
+  ): AsyncGenerator<{ chunk: string; done: boolean }, CoachingResponse, unknown> {
+    // Determine task type based on context
+    const taskType = this.inferTaskType(userMessage, context);
+    const routeInfo = this.getAdapterForTask(taskType);
+
+    if (!routeInfo || !routeInfo.adapter.generateStream) {
+      // Return mock response as single chunk if no streaming support
+      const mock = getMockCoachingResponse(userMessage);
+      yield { chunk: mock, done: true };
+      return {
+        message: mock,
+        questionsAsked: (mock.match(/\?/g) || []).length,
+        policyViolations: [],
+      };
+    }
+
+    console.log(`[LLM Router] Streaming Coaching (${taskType}) → ${routeInfo.adapter.provider}`);
+
+    const systemPrompt = buildSystemPrompt(context);
+
+    const messages: LLMMessage[] = [
+      { role: 'system', content: systemPrompt },
+      ...context.recentMessages,
+      { role: 'user', content: userMessage },
+    ];
+
+    let fullContent = '';
+
+    try {
+      for await (const chunk of routeInfo.adapter.generateStream({ messages })) {
+        fullContent += chunk;
+        yield { chunk, done: false };
+      }
+    } catch (error) {
+      // On error, yield error info and return partial response
+      console.error('[LLM Stream] Error during streaming:', error);
+      throw error;
+    }
+
+    // Signal completion
+    yield { chunk: '', done: true };
+
+    // Validate the full response
+    const validation = this.validateResponse(fullContent, context.currentMode);
+
+    return {
+      message: fullContent,
+      suggestedMode: this.inferNextMode(userMessage, fullContent, context),
       suggestedMove: this.detectCoachingMove(userMessage),
       detectedSignals: this.detectSignals(userMessage),
       questionsAsked: validation.questionCount,

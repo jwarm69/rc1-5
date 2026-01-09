@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCalibration } from "@/contexts/CalibrationContext";
 import { useCoachingEngine } from "@/contexts/CoachingEngineContext";
-import { getLLMClient } from "@/lib/llm";
+import { getLLMClient, LLMError } from "@/lib/llm";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -851,7 +851,17 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
           content: m.content,
         }));
 
-        const response = await client.generateCoachingResponse(userInput, {
+        // Create placeholder message immediately for streaming
+        const messageId = (Date.now() + 1).toString();
+        const coachResponse: Message = {
+          id: messageId,
+          role: "coach",
+          content: "",
+        };
+        setMessages(prev => [...prev, coachResponse]);
+
+        // Stream the response
+        const stream = client.generateCoachingResponseStream(userInput, {
           currentMode: engine.getCurrentMode(),
           currentMove: engine.getCurrentMove(),
           tone: calibration.state.tone || null,
@@ -860,30 +870,65 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
           recentMessages,
         });
 
-        const coachResponse: Message = {
-          id: (Date.now() + 1).toString(),
-          role: "coach",
-          content: response.message,
-        };
-        setMessages(prev => [...prev, coachResponse]);
-        await saveMessage(coachResponse);
+        let finalResponse: Awaited<ReturnType<typeof client.generateCoachingResponse>> | null = null;
+
+        // Process streaming chunks
+        while (true) {
+          const result = await stream.next();
+
+          if (result.done) {
+            // Generator returned final response metadata
+            finalResponse = result.value;
+            break;
+          }
+
+          const { chunk, done } = result.value;
+          if (!done && chunk) {
+            // Update message with new chunk
+            setMessages(prev => prev.map(m =>
+              m.id === messageId
+                ? { ...m, content: m.content + chunk }
+                : m
+            ));
+          }
+        }
+
+        // Save the final message
+        setMessages(prev => {
+          const finalMsg = prev.find(m => m.id === messageId);
+          if (finalMsg) {
+            saveMessage(finalMsg);
+          }
+          return prev;
+        });
 
         // Update engine state if mode/move suggested
-        if (response.suggestedMode) {
-          engine.transitionTo(response.suggestedMode);
+        if (finalResponse?.suggestedMode) {
+          engine.transitionTo(finalResponse.suggestedMode);
         }
 
         // Log policy violations for debugging
-        if (response.policyViolations && response.policyViolations.length > 0) {
-          console.warn('Coaching policy violations:', response.policyViolations);
+        if (finalResponse?.policyViolations && finalResponse.policyViolations.length > 0) {
+          console.warn('Coaching policy violations:', finalResponse.policyViolations);
         }
       } catch (error) {
         console.error('LLM error:', error);
-        // Fallback to "Noted." on error
+
+        // Context-aware fallback messages (no urgency, stay in coaching mode)
+        let fallbackContent = "Got it. What would help you move forward today?";
+
+        if (error instanceof LLMError) {
+          if (error.code === 'RATE_LIMIT') {
+            fallbackContent = "Give me a moment. What's on your mind?";
+          } else if (error.code === 'INVALID_CONFIG') {
+            fallbackContent = "I'm here to help. What matters most to you today?";
+          }
+        }
+
         const fallback: Message = {
           id: (Date.now() + 1).toString(),
           role: "coach",
-          content: "Noted.",
+          content: fallbackContent,
         };
         setMessages(prev => [...prev, fallback]);
         await saveMessage(fallback);

@@ -97,6 +97,101 @@ export class OpenAIAdapter implements LLMAdapter {
       );
     }
   }
+
+  /**
+   * Stream a response from OpenAI API
+   */
+  async *generateStream(request: LLMRequest): AsyncGenerator<string, void, unknown> {
+    if (!this.validateConfig()) {
+      throw new LLMError(
+        'Invalid OpenAI API key configuration',
+        'INVALID_CONFIG',
+        'openai'
+      );
+    }
+
+    const messages = request.messages.map(m => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+    const body = {
+      model: this.model,
+      messages,
+      max_tokens: request.options?.maxTokens || 1024,
+      temperature: request.options?.temperature ?? 0.7,
+      stop: request.options?.stopSequences,
+      stream: true,
+    };
+
+    try {
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+
+        if (response.status === 429) {
+          throw new LLMError('Rate limit exceeded', 'RATE_LIMIT', 'openai', 429);
+        }
+
+        throw new LLMError(
+          error.error?.message || `API error: ${response.status}`,
+          'API_ERROR',
+          'openai',
+          response.status
+        );
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new LLMError('No response body', 'API_ERROR', 'openai');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const jsonStr = line.slice(6).trim();
+            if (jsonStr && jsonStr !== '[DONE]') {
+              try {
+                const data = JSON.parse(jsonStr);
+                const content = data.choices?.[0]?.delta?.content;
+                if (content) {
+                  yield content;
+                }
+              } catch {
+                // Skip malformed JSON
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      if (error instanceof LLMError) throw error;
+
+      throw new LLMError(
+        error instanceof Error ? error.message : 'Unknown error',
+        'UNKNOWN',
+        'openai'
+      );
+    }
+  }
 }
 
 function mapFinishReason(reason: string | undefined): 'stop' | 'length' | 'content_filter' {
