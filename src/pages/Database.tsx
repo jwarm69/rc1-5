@@ -4,10 +4,12 @@ import { CreateContactModal } from "@/components/database/CreateContactModal";
 import { AddToPipelineModal } from "@/components/database/AddToPipelineModal";
 import { useDatabaseContext } from "@/contexts/DatabaseContext";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, ArrowRight, Check, Search, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface ContactNote {
   date: string;
@@ -28,11 +30,12 @@ interface Contact {
   dealHistory?: string;
   pipelineStage?: number;
   isInPipeline?: boolean;
+  isDemo?: boolean;
 }
 
 const demoContacts: Contact[] = [
   {
-    id: "1",
+    id: "demo-1",
     firstName: "Jake",
     lastName: "Robinson",
     phone: "(555) 987-1234",
@@ -44,26 +47,29 @@ const demoContacts: Contact[] = [
     dealHistory: "Pre-approved up to $500k. Looking to close by summer.",
     pipelineStage: 3,
     isInPipeline: true,
+    isDemo: true,
     notes: [
       { date: "Jan 9", content: "Had a great call with Jake. He's very interested in finding a new home ASAP and is pre-approved up to $500k." },
       { date: "Dec 24", content: "Jake mentioned that his family will be moving to the area this summer due to job relocation. Wants a 4-bedroom house in a good school district." },
       { date: "Dec 15", content: "Got a new lead for Jake from a past client referral. Connected on Facebook — saw they recently posted about wanting to move. Gave him a call and he was receptive." },
     ],
   },
-  { id: "2", firstName: "Sarah", lastName: "Mitchell", phone: "(555) 234-5678", email: "sarah.m@email.com", lastContacted: "Jan 8", leadSource: "Open House", address: "456 Maple Ave, Springfield, IL 62705", tags: ["Buyer"], pipelineStage: 2, isInPipeline: true, notes: [{ date: "Jan 8", content: "Met at open house on Elm Street. Interested in 3BR homes under $350k." }] },
-  { id: "3", firstName: "Michael", lastName: "Roberts", phone: "(555) 345-6789", email: "m.roberts@email.com", lastContacted: "Jan 5", leadSource: "Expired Listing", tags: ["Seller", "Expired Listing"], pipelineStage: 1, isInPipeline: true, notes: [{ date: "Jan 5", content: "Listing expired after 90 days. Open to re-listing with new approach." }] },
-  { id: "4", firstName: "Jennifer", lastName: "Wu", phone: "(555) 456-7890", email: "jennifer.wu@email.com", lastContacted: "Jan 4", leadSource: "Website", pipelineStage: 0, isInPipeline: true },
-  { id: "5", firstName: "David", lastName: "Chen", phone: "(555) 567-8901", email: "d.chen@email.com", lastContacted: "Jan 2", leadSource: "Past Client", tags: ["Past Client"], dealHistory: "Closed 2023. 4BR Colonial, $425k.", pipelineStage: 6, isInPipeline: true, notes: [{ date: "Jan 2", content: "Checking in for annual follow-up. Happy in new home, may have referrals." }] },
-  { id: "6", firstName: "Robert", lastName: "Johnson", phone: "(555) 678-9012", email: "r.johnson@email.com", lastContacted: "Dec 28", leadSource: "Sphere", tags: ["Seller"], pipelineStage: 5, isInPipeline: true },
+  { id: "demo-2", firstName: "Sarah", lastName: "Mitchell", phone: "(555) 234-5678", email: "sarah.m@email.com", lastContacted: "Jan 8", leadSource: "Open House", address: "456 Maple Ave, Springfield, IL 62705", tags: ["Buyer"], pipelineStage: 2, isInPipeline: true, isDemo: true, notes: [{ date: "Jan 8", content: "Met at open house on Elm Street. Interested in 3BR homes under $350k." }] },
+  { id: "demo-3", firstName: "Michael", lastName: "Roberts", phone: "(555) 345-6789", email: "m.roberts@email.com", lastContacted: "Jan 5", leadSource: "Expired Listing", tags: ["Seller", "Expired Listing"], pipelineStage: 1, isInPipeline: true, isDemo: true, notes: [{ date: "Jan 5", content: "Listing expired after 90 days. Open to re-listing with new approach." }] },
+  { id: "demo-4", firstName: "Jennifer", lastName: "Wu", phone: "(555) 456-7890", email: "jennifer.wu@email.com", lastContacted: "Jan 4", leadSource: "Website", pipelineStage: 0, isInPipeline: true, isDemo: true },
+  { id: "demo-5", firstName: "David", lastName: "Chen", phone: "(555) 567-8901", email: "d.chen@email.com", lastContacted: "Jan 2", leadSource: "Past Client", tags: ["Past Client"], dealHistory: "Closed 2023. 4BR Colonial, $425k.", pipelineStage: 6, isInPipeline: true, isDemo: true, notes: [{ date: "Jan 2", content: "Checking in for annual follow-up. Happy in new home, may have referrals." }] },
+  { id: "demo-6", firstName: "Robert", lastName: "Johnson", phone: "(555) 678-9012", email: "r.johnson@email.com", lastContacted: "Dec 28", leadSource: "Sphere", tags: ["Seller"], pipelineStage: 5, isInPipeline: true, isDemo: true },
   // New contacts NOT in pipeline
-  { id: "7", firstName: "Amanda", lastName: "Torres", phone: "(555) 111-2233", email: "amanda.torres@email.com", lastContacted: "Dec 20", leadSource: "Facebook Ad", isInPipeline: false },
-  { id: "8", firstName: "Kevin", lastName: "Park", phone: "(555) 222-3344", email: "kevin.park@email.com", lastContacted: "Dec 18", leadSource: "Zillow", isInPipeline: false },
-  { id: "9", firstName: "Lisa", lastName: "Martinez", phone: "(555) 333-4455", email: "lisa.martinez@email.com", lastContacted: "Dec 15", leadSource: "Cold Call", tags: ["Investor"], isInPipeline: false },
-  { id: "10", firstName: "Thomas", lastName: "Wright", phone: "(555) 444-5566", email: "t.wright@email.com", lastContacted: "Dec 12", leadSource: "Networking Event", isInPipeline: false },
-  { id: "11", firstName: "Rachel", lastName: "Kim", phone: "(555) 555-6677", email: "rachel.kim@email.com", lastContacted: "Dec 10", leadSource: "Referral", tags: ["First-Time Buyer"], isInPipeline: false },
+  { id: "demo-7", firstName: "Amanda", lastName: "Torres", phone: "(555) 111-2233", email: "amanda.torres@email.com", lastContacted: "Dec 20", leadSource: "Facebook Ad", isInPipeline: false, isDemo: true },
+  { id: "demo-8", firstName: "Kevin", lastName: "Park", phone: "(555) 222-3344", email: "kevin.park@email.com", lastContacted: "Dec 18", leadSource: "Zillow", isInPipeline: false, isDemo: true },
+  { id: "demo-9", firstName: "Lisa", lastName: "Martinez", phone: "(555) 333-4455", email: "lisa.martinez@email.com", lastContacted: "Dec 15", leadSource: "Cold Call", tags: ["Investor"], isInPipeline: false, isDemo: true },
+  { id: "demo-10", firstName: "Thomas", lastName: "Wright", phone: "(555) 444-5566", email: "t.wright@email.com", lastContacted: "Dec 12", leadSource: "Networking Event", isInPipeline: false, isDemo: true },
+  { id: "demo-11", firstName: "Rachel", lastName: "Kim", phone: "(555) 555-6677", email: "rachel.kim@email.com", lastContacted: "Dec 10", leadSource: "Referral", tags: ["First-Time Buyer"], isInPipeline: false, isDemo: true },
 ];
 
 export default function Database() {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [contacts, setContacts] = useState<Contact[]>(demoContacts);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -73,6 +79,89 @@ export default function Database() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const { setIsContactOpen } = useDatabaseContext();
   const isMobile = useIsMobile();
+
+  // Update contact handler
+  const handleUpdateContact = async (updatedContact: Contact) => {
+    if (updatedContact.isDemo) {
+      toast({
+        title: "Demo contact",
+        description: "Demo contacts cannot be edited. Create a real contact to test editing.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("contacts")
+        .update({
+          first_name: updatedContact.firstName,
+          last_name: updatedContact.lastName,
+          phone: updatedContact.phone || null,
+          email: updatedContact.email || null,
+          address: updatedContact.address || null,
+          lead_source: updatedContact.leadSource || null,
+          tags: updatedContact.tags || [],
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", updatedContact.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Contact updated",
+        description: `${updatedContact.firstName} ${updatedContact.lastName} has been updated.`,
+      });
+
+      // Update local state
+      setContacts(prev => prev.map(c => c.id === updatedContact.id ? updatedContact : c));
+      setSelectedContact(updatedContact);
+    } catch (error: any) {
+      console.error("Error updating contact:", error);
+      toast({
+        title: "Error updating contact",
+        description: error.message || "Something went wrong.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Delete contact handler
+  const handleDeleteContact = async (contactId: string) => {
+    const contact = contacts.find(c => c.id === contactId);
+    if (contact?.isDemo) {
+      toast({
+        title: "Demo contact",
+        description: "Demo contacts cannot be deleted.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("contacts")
+        .delete()
+        .eq("id", contactId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Contact deleted",
+        description: "The contact has been removed.",
+      });
+
+      setSelectedContact(null);
+      setContacts(prev => prev.filter(c => c.id !== contactId));
+    } catch (error: any) {
+      console.error("Error deleting contact:", error);
+      toast({
+        title: "Error deleting contact",
+        description: error.message || "Something went wrong.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const filteredContacts = contacts.filter((contact) => {
     if (!searchQuery.trim()) return true;
@@ -114,6 +203,7 @@ export default function Database() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
+        // Show demo data for unauthenticated users
         setContacts(demoContacts);
         return;
       }
@@ -128,6 +218,7 @@ export default function Database() {
         return;
       }
 
+      // For authenticated users, show only real data (no demo mixing)
       if (data && data.length > 0) {
         const formattedContacts: Contact[] = data.map((c) => ({
           id: c.id,
@@ -142,8 +233,12 @@ export default function Database() {
           dealHistory: c.deal_history || undefined,
           pipelineStage: c.pipeline_stage || 0,
           isInPipeline: false,
+          isDemo: false,
         }));
-        setContacts([...formattedContacts, ...demoContacts]);
+        setContacts(formattedContacts);
+      } else {
+        // Authenticated but no contacts yet - show empty state
+        setContacts([]);
       }
     } catch (error) {
       console.error("Error fetching contacts:", error);
@@ -326,7 +421,12 @@ export default function Database() {
         </div>
       )}
 
-      <ContactModal contact={selectedContact} onClose={() => setSelectedContact(null)} />
+      <ContactModal
+        contact={selectedContact}
+        onClose={() => setSelectedContact(null)}
+        onUpdate={handleUpdateContact}
+        onDelete={handleDeleteContact}
+      />
       <CreateContactModal 
         open={isCreateModalOpen} 
         onClose={() => setIsCreateModalOpen(false)} 
