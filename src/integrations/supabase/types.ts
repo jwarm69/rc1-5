@@ -7,234 +7,529 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.1"
-  }
   public: {
     Tables: {
       action_items: {
         Row: {
-          action_text: string
-          completed: boolean
-          contact_name: string | null
-          created_at: string
           id: string
-          user_id: string | null
-        }
-        Insert: {
-          action_text: string
-          completed?: boolean
-          contact_name?: string | null
-          created_at?: string
-          id?: string
-          user_id?: string | null
-        }
-        Update: {
-          action_text?: string
-          completed?: boolean
-          contact_name?: string | null
-          created_at?: string
-          id?: string
-          user_id?: string | null
-        }
-        Relationships: []
-      }
-      activities: {
-        Row: {
-          contact_id: string
-          created_at: string
+          user_id: string
+          title: string
           description: string | null
-          id: string
-          title: string
-          type: string
+          action_type: string
+          category: string | null
+          status: string
+          minimum_viable: string | null
+          stretch_goal: string | null
+          milestone_connection: string | null
+          minutes_estimate: number | null
+          steps: string[]
+          action_date: string
+          priority: string
+          completed_at: string | null
+          created_at: string
+          updated_at: string
         }
         Insert: {
-          contact_id: string
-          created_at?: string
-          description?: string | null
           id?: string
+          user_id: string
           title: string
-          type: string
+          description?: string | null
+          action_type?: string
+          category?: string | null
+          status?: string
+          minimum_viable?: string | null
+          stretch_goal?: string | null
+          milestone_connection?: string | null
+          minutes_estimate?: number | null
+          steps?: string[]
+          action_date?: string
+          priority?: string
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
         }
         Update: {
-          contact_id?: string
-          created_at?: string
-          description?: string | null
           id?: string
+          user_id?: string
           title?: string
-          type?: string
+          description?: string | null
+          action_type?: string
+          category?: string | null
+          status?: string
+          minimum_viable?: string | null
+          stretch_goal?: string | null
+          milestone_connection?: string | null
+          minutes_estimate?: number | null
+          steps?: string[]
+          action_date?: string
+          priority?: string
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "action_items_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      calibration_answers: {
+        Row: {
+          id: string
+          user_id: string
+          question_id: string
+          question_type: string
+          answer: string
+          answered_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          question_id: string
+          question_type?: string
+          answer: string
+          answered_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          question_id?: string
+          question_type?: string
+          answer?: string
+          answered_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calibration_answers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       chat_messages: {
         Row: {
-          action_type: string | null
-          content: string
-          created_at: string
           id: string
-          role: string
           user_id: string
+          role: string
+          content: string
+          coaching_mode: string | null
+          created_at: string
         }
         Insert: {
-          action_type?: string | null
-          content: string
-          created_at?: string
           id?: string
-          role: string
           user_id: string
+          role: string
+          content: string
+          coaching_mode?: string | null
+          created_at?: string
         }
         Update: {
-          action_type?: string | null
-          content?: string
-          created_at?: string
           id?: string
-          role?: string
           user_id?: string
+          role?: string
+          content?: string
+          coaching_mode?: string | null
+          created_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      coaching_sessions: {
+        Row: {
+          id: string
+          user_id: string
+          session_date: string
+          mode: string
+          move: string | null
+          questions_asked: number
+          policy_violations: string[]
+          missed_day_detected: boolean
+          missed_day_choice: string | null
+          commitment: string | null
+          commitment_completed: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          session_date?: string
+          mode: string
+          move?: string | null
+          questions_asked?: number
+          policy_violations?: string[]
+          missed_day_detected?: boolean
+          missed_day_choice?: string | null
+          commitment?: string | null
+          commitment_completed?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          session_date?: string
+          mode?: string
+          move?: string | null
+          questions_asked?: number
+          policy_violations?: string[]
+          missed_day_detected?: boolean
+          missed_day_choice?: string | null
+          commitment?: string | null
+          commitment_completed?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coaching_sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       contacts: {
         Row: {
-          address: string | null
-          created_at: string
-          deal_history: string | null
-          email: string | null
-          first_name: string
           id: string
-          last_contacted: string | null
+          user_id: string
+          first_name: string
           last_name: string
-          lead_source: string | null
           phone: string | null
-          pipeline_stage: number | null
-          tags: string[] | null
+          email: string | null
+          address: string | null
+          lead_source: string | null
+          tags: string[]
+          deal_history: string | null
+          pipeline_stage: number
+          last_contacted: string | null
+          notes: Json
+          created_at: string
           updated_at: string
-          user_id: string | null
         }
         Insert: {
-          address?: string | null
-          created_at?: string
-          deal_history?: string | null
-          email?: string | null
+          id?: string
+          user_id: string
           first_name: string
-          id?: string
-          last_contacted?: string | null
           last_name: string
-          lead_source?: string | null
           phone?: string | null
-          pipeline_stage?: number | null
-          tags?: string[] | null
-          updated_at?: string
-          user_id?: string | null
-        }
-        Update: {
-          address?: string | null
-          created_at?: string
-          deal_history?: string | null
           email?: string | null
-          first_name?: string
-          id?: string
-          last_contacted?: string | null
-          last_name?: string
+          address?: string | null
           lead_source?: string | null
-          phone?: string | null
-          pipeline_stage?: number | null
-          tags?: string[] | null
+          tags?: string[]
+          deal_history?: string | null
+          pipeline_stage?: number
+          last_contacted?: string | null
+          notes?: Json
+          created_at?: string
           updated_at?: string
-          user_id?: string | null
-        }
-        Relationships: []
-      }
-      meetings: {
-        Row: {
-          contact_name: string | null
-          created_at: string
-          id: string
-          location: string | null
-          meeting_date: string
-          meeting_time: string | null
-          notes: string | null
-          user_id: string | null
-        }
-        Insert: {
-          contact_name?: string | null
-          created_at?: string
-          id?: string
-          location?: string | null
-          meeting_date: string
-          meeting_time?: string | null
-          notes?: string | null
-          user_id?: string | null
         }
         Update: {
-          contact_name?: string | null
-          created_at?: string
           id?: string
-          location?: string | null
-          meeting_date?: string
-          meeting_time?: string | null
-          notes?: string | null
-          user_id?: string | null
+          user_id?: string
+          first_name?: string
+          last_name?: string
+          phone?: string | null
+          email?: string | null
+          address?: string | null
+          lead_source?: string | null
+          tags?: string[]
+          deal_history?: string | null
+          pipeline_stage?: number
+          last_contacted?: string | null
+          notes?: Json
+          created_at?: string
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "contacts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
-      notes: {
+      daily_checkins: {
         Row: {
-          contact_name: string | null
-          content: string
-          created_at: string
           id: string
-          user_id: string | null
+          user_id: string
+          checkin_date: string
+          raw_response: string | null
+          completed_action_ids: string[]
+          partial_progress: string | null
+          momentum_signal: string | null
+          friction_indicators: string[]
+          created_at: string
         }
         Insert: {
-          contact_name?: string | null
-          content: string
-          created_at?: string
           id?: string
-          user_id?: string | null
+          user_id: string
+          checkin_date?: string
+          raw_response?: string | null
+          completed_action_ids?: string[]
+          partial_progress?: string | null
+          momentum_signal?: string | null
+          friction_indicators?: string[]
+          created_at?: string
         }
         Update: {
-          contact_name?: string | null
-          content?: string
-          created_at?: string
           id?: string
-          user_id?: string | null
+          user_id?: string
+          checkin_date?: string
+          raw_response?: string | null
+          completed_action_ids?: string[]
+          partial_progress?: string | null
+          momentum_signal?: string | null
+          friction_indicators?: string[]
+          created_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "daily_checkins_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       opportunities: {
         Row: {
-          contact_name: string
-          created_at: string
-          deal_amount: number | null
           id: string
+          user_id: string
+          contact_id: string | null
+          contact_name: string
+          stage: number
+          deal_value: number | null
+          expected_close_date: string | null
+          deal_type: string | null
+          source: string | null
           notes: string | null
-          status: string
+          created_at: string
           updated_at: string
-          user_id: string | null
         }
         Insert: {
-          contact_name: string
-          created_at?: string
-          deal_amount?: number | null
           id?: string
+          user_id: string
+          contact_id?: string | null
+          contact_name: string
+          stage?: number
+          deal_value?: number | null
+          expected_close_date?: string | null
+          deal_type?: string | null
+          source?: string | null
           notes?: string | null
-          status?: string
+          created_at?: string
           updated_at?: string
-          user_id?: string | null
         }
         Update: {
-          contact_name?: string
-          created_at?: string
-          deal_amount?: number | null
           id?: string
+          user_id?: string
+          contact_id?: string | null
+          contact_name?: string
+          stage?: number
+          deal_value?: number | null
+          expected_close_date?: string | null
+          deal_type?: string | null
+          source?: string | null
           notes?: string | null
-          status?: string
+          created_at?: string
           updated_at?: string
-          user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "opportunities_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      user_business_plan: {
+        Row: {
+          id: string
+          user_id: string
+          revenue_target: string | null
+          buyer_seller_split: string | null
+          unit_target: number | null
+          average_commission: number | null
+          primary_lead_source: string | null
+          secondary_lead_sources: string[]
+          geographic_focus: string | null
+          risk_tolerance: string | null
+          weekly_hours_available: number | null
+          status: string
+          confirmed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          revenue_target?: string | null
+          buyer_seller_split?: string | null
+          unit_target?: number | null
+          average_commission?: number | null
+          primary_lead_source?: string | null
+          secondary_lead_sources?: string[]
+          geographic_focus?: string | null
+          risk_tolerance?: string | null
+          weekly_hours_available?: number | null
+          status?: string
+          confirmed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          revenue_target?: string | null
+          buyer_seller_split?: string | null
+          unit_target?: number | null
+          average_commission?: number | null
+          primary_lead_source?: string | null
+          secondary_lead_sources?: string[]
+          geographic_focus?: string | null
+          risk_tolerance?: string | null
+          weekly_hours_available?: number | null
+          status?: string
+          confirmed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_business_plan_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      user_calibration: {
+        Row: {
+          id: string
+          user_id: string
+          state: string
+          tone: string | null
+          fast_lane_triggered: boolean
+          current_question_index: number
+          started_at: string | null
+          completed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          state?: string
+          tone?: string | null
+          fast_lane_triggered?: boolean
+          current_question_index?: number
+          started_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          state?: string
+          tone?: string | null
+          fast_lane_triggered?: boolean
+          current_question_index?: number
+          started_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_calibration_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      user_goals_actions: {
+        Row: {
+          id: string
+          user_id: string
+          annual_professional_goal: string | null
+          annual_personal_goal: string | null
+          current_reality: string | null
+          monthly_milestone: string | null
+          execution_style: string | null
+          willingness_filter: string[]
+          friction_boundaries: string[]
+          status: string
+          confirmed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          annual_professional_goal?: string | null
+          annual_personal_goal?: string | null
+          current_reality?: string | null
+          monthly_milestone?: string | null
+          execution_style?: string | null
+          willingness_filter?: string[]
+          friction_boundaries?: string[]
+          status?: string
+          confirmed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          annual_professional_goal?: string | null
+          annual_personal_goal?: string | null
+          current_reality?: string | null
+          monthly_milestone?: string | null
+          execution_style?: string | null
+          willingness_filter?: string[]
+          friction_boundaries?: string[]
+          status?: string
+          confirmed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_goals_actions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
     }
     Views: {
@@ -252,125 +547,99 @@ export type Database = {
   }
 }
 
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
-
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+type PublicSchema = Database[Extract<keyof Database, "public">]
 
 export type Tables<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+  PublicTableNameOrOptions extends
+    | keyof (PublicSchema["Tables"] & PublicSchema["Views"])
+    | { schema: keyof Database },
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
+        Database[PublicTableNameOrOptions["schema"]]["Views"])
+    : never = never
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
+      Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
-      }
-      ? R
-      : never
+  : PublicTableNameOrOptions extends keyof (PublicSchema["Tables"] &
+      PublicSchema["Views"])
+  ? (PublicSchema["Tables"] &
+      PublicSchema["Views"])[PublicTableNameOrOptions] extends {
+      Row: infer R
+    }
+    ? R
     : never
+  : never
 
 export type TablesInsert<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+  PublicTableNameOrOptions extends
+    | keyof PublicSchema["Tables"]
+    | { schema: keyof Database },
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
+    : never = never
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
-      }
-      ? I
-      : never
+  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
+  ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
+      Insert: infer I
+    }
+    ? I
     : never
+  : never
 
 export type TablesUpdate<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+  PublicTableNameOrOptions extends
+    | keyof PublicSchema["Tables"]
+    | { schema: keyof Database },
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
+    : never = never
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
-      }
-      ? U
-      : never
+  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
+  ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
+      Update: infer U
+    }
+    ? U
     : never
+  : never
 
 export type Enums<
-  DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
+  PublicEnumNameOrOptions extends
+    | keyof PublicSchema["Enums"]
+    | { schema: keyof Database },
+  EnumName extends PublicEnumNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicEnumNameOrOptions["schema"]]["Enums"]
+    : never = never
+> = PublicEnumNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : PublicEnumNameOrOptions extends keyof PublicSchema["Enums"]
+  ? PublicSchema["Enums"][PublicEnumNameOrOptions]
+  : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
+    | keyof PublicSchema["CompositeTypes"]
+    | { schema: keyof Database },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof Database
   }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
-
-export const Constants = {
-  public: {
-    Enums: {},
-  },
-} as const
+    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof PublicSchema["CompositeTypes"]
+  ? PublicSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+  : never
