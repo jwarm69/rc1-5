@@ -107,12 +107,12 @@ export default function Pipeline() {
         const formattedOpportunities: PipelineLead[] = data.map((o) => ({
           id: o.id,
           name: o.contact_name,
-          dealAmount: o.deal_amount || 0,
-          gci: (o.deal_amount || 0) * 0.03, // 3% GCI estimate
+          dealAmount: o.deal_value || 0,
+          gci: (o.deal_value || 0) * 0.03, // 3% GCI estimate
           estClose: o.expected_close_date
             ? new Date(o.expected_close_date).toLocaleDateString("en-US", { month: "short", year: "numeric" })
             : "TBD",
-          status: o.status || "Initial Contact",
+          status: PIPELINE_STATUSES[o.stage] || "Initial Contact",
           dealType: "Buy" as const, // Default, could be stored in DB
           source: "Database",
           notes: o.notes ? [{ date: new Date(o.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }), content: o.notes }] : undefined,
@@ -188,7 +188,7 @@ export default function Pipeline() {
       try {
         const { error } = await supabase
           .from("opportunities")
-          .update({ status: newStatus, updated_at: new Date().toISOString() })
+          .update({ stage: PIPELINE_STATUSES.indexOf(newStatus), updated_at: new Date().toISOString() })
           .eq("id", leadId);
 
         if (error) {
