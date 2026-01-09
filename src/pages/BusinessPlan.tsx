@@ -1,6 +1,10 @@
-import { Target, ChevronRight } from "lucide-react";
+import { Target, ChevronRight, Pencil, Plus, Loader2 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useBusinessPlan, DatabaseBusinessPlan } from "@/hooks/useBusinessPlan";
+import { BusinessPlanModal } from "@/components/business-plan/BusinessPlanModal";
+import { Button } from "@/components/ui/button";
 
 interface Strategy {
   id: string;
@@ -91,31 +95,129 @@ function StrategyColumn({
   );
 }
 
+// Demo data for unauthenticated users
+const demoBusinessPlan: DatabaseBusinessPlan = {
+  revenueTarget: "$180,000",
+  buyerSellerSplit: "50/50",
+  unitTarget: 15,
+  averageCommission: 12000,
+  primaryLeadSource: "Sphere of Influence",
+  secondaryLeadSources: ["Open Houses", "Expired Listings"],
+  geographicFocus: "Downtown Metro",
+  riskTolerance: "MODERATE",
+  weeklyHoursAvailable: 40,
+  status: "CONFIRMED",
+};
+
 export default function BusinessPlan() {
   const isMobile = useIsMobile();
+  const { user } = useAuth();
+  const { loadBusinessPlan, isLoading: hookLoading } = useBusinessPlan();
+
+  const [businessPlan, setBusinessPlan] = useState<DatabaseBusinessPlan | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const fetchBusinessPlan = useCallback(async () => {
+    if (!user) {
+      setBusinessPlan(demoBusinessPlan);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    const plan = await loadBusinessPlan();
+    setBusinessPlan(plan);
+    setIsLoading(false);
+  }, [user, loadBusinessPlan]);
+
+  useEffect(() => {
+    fetchBusinessPlan();
+  }, [fetchBusinessPlan]);
+
+  const handleModalComplete = () => {
+    fetchBusinessPlan(); // Refetch after save
+  };
+
+  // Use loaded data or demo data for display
+  const displayPlan = businessPlan || demoBusinessPlan;
+  const hasRealPlan = user && businessPlan !== null;
+  const showCreateButton = user && businessPlan === null && !isLoading;
+
+  if (isLoading) {
+    return (
+      <div className="animate-fade-in flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">
-      {/* Page header */}
-      <div className="mb-6 md:mb-8">
-        <h1 className="text-xl font-semibold text-foreground">Business Plan</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Annual focus.
-        </p>
+      {/* Page header with Edit button */}
+      <div className="mb-6 md:mb-8 flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">Business Plan</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Annual focus.
+          </p>
+        </div>
+        {hasRealPlan && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsModalOpen(true)}
+            className="gap-2"
+          >
+            <Pencil className="w-4 h-4" />
+            Edit
+          </Button>
+        )}
       </div>
 
-      {/* Single Business Goal - Visually dominant */}
-      <div className="mb-6 md:mb-10 p-5 md:p-6 rounded-xl bg-card border border-border text-center">
-        <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 mb-3 md:mb-4">
-          <Target className="w-5 h-5 text-primary" />
+      {/* Create Plan button for authenticated users without a plan */}
+      {showCreateButton && (
+        <div className="mb-6 md:mb-10 p-8 rounded-xl bg-card border border-dashed border-border text-center">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10 mb-4">
+            <Target className="w-6 h-6 text-primary" />
+          </div>
+          <h2 className="text-lg font-medium text-foreground mb-2">
+            Create Your Business Plan
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
+            Define your revenue targets, lead sources, and strategic pillars for the year.
+          </p>
+          <Button onClick={() => setIsModalOpen(true)} className="gap-2">
+            <Plus className="w-4 h-4" />
+            Create Business Plan
+          </Button>
         </div>
-        <h2 className="text-xl md:text-2xl font-semibold text-foreground mb-2">
-          Close $180,000 in GCI
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          2025 Business Goal • 15 closed transactions
-        </p>
-      </div>
+      )}
+
+      {/* Single Business Goal - Visually dominant (show if plan exists or demo) */}
+      {!showCreateButton && (
+        <div className="mb-6 md:mb-10 p-5 md:p-6 rounded-xl bg-card border border-border text-center">
+          <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 mb-3 md:mb-4">
+            <Target className="w-5 h-5 text-primary" />
+          </div>
+          <h2 className="text-xl md:text-2xl font-semibold text-foreground mb-2">
+            Close {displayPlan.revenueTarget} in GCI
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {new Date().getFullYear()} Business Goal • {displayPlan.unitTarget || 0} closed transactions
+          </p>
+          {displayPlan.primaryLeadSource && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Primary Focus: {displayPlan.primaryLeadSource}
+            </p>
+          )}
+          {!user && (
+            <p className="text-xs text-muted-foreground/60 mt-3 italic">
+              Demo data • Sign in to create your plan
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Strategy columns - Stacked on mobile */}
       <div>
@@ -145,21 +247,28 @@ export default function BusinessPlan() {
         ) : (
           /* Desktop: Three columns */
           <div className="grid grid-cols-3 gap-6">
-            <StrategyColumn 
-              title="Lead Generation" 
-              strategies={strategies.leadGeneration} 
+            <StrategyColumn
+              title="Lead Generation"
+              strategies={strategies.leadGeneration}
             />
-            <StrategyColumn 
-              title="Client Experience" 
-              strategies={strategies.clientExperience} 
+            <StrategyColumn
+              title="Client Experience"
+              strategies={strategies.clientExperience}
             />
-            <StrategyColumn 
-              title="Leverage & Scale" 
-              strategies={strategies.leverageScale} 
+            <StrategyColumn
+              title="Leverage & Scale"
+              strategies={strategies.leverageScale}
             />
           </div>
         )}
       </div>
+
+      {/* Business Plan Modal */}
+      <BusinessPlanModal
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        onComplete={handleModalComplete}
+      />
     </div>
   );
 }
