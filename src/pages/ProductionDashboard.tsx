@@ -1,6 +1,39 @@
 import { CircularProgress } from "@/components/production/CircularProgress";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { Loader2 } from "lucide-react";
+
+interface KPIs {
+  appointmentsHeld: number;
+  clientsSigned: number;
+  closedUnits: number;
+  gci: number;
+}
+
+interface FunnelStage {
+  stage: string;
+  value: number;
+  width: number;
+}
+
+// Demo KPIs for unauthenticated users
+const demoKPIs: KPIs = {
+  appointmentsHeld: 5,
+  clientsSigned: 4,
+  closedUnits: 2,
+  gci: 12000,
+};
+
+// Demo targets (could eventually come from BusinessPlan)
+const targets = {
+  appointments: 8,
+  clients: 6,
+  closedUnits: 5,
+  gci: 23000,
+};
 
 const revenueData = [
   { quarter: "Q1", closed: 34800, forecasted: 45000 },
@@ -17,7 +50,7 @@ const sourceData = [
   { name: "Expired", value: 8, color: "hsl(200, 15%, 35%)" },
 ];
 
-const funnelData = [
+const demoFunnelData: FunnelStage[] = [
   { stage: "Leads", value: 48, width: 100 },
   { stage: "Contacted", value: 32, width: 75 },
   { stage: "Appointments", value: 12, width: 50 },
@@ -27,6 +60,91 @@ const funnelData = [
 
 export default function ProductionDashboard() {
   const isMobile = useIsMobile();
+  const { user } = useAuth();
+
+  const [kpis, setKpis] = useState<KPIs>(demoKPIs);
+  const [funnelData, setFunnelData] = useState<FunnelStage[]>(demoFunnelData);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchDashboardData = useCallback(async () => {
+    if (!user) {
+      setKpis(demoKPIs);
+      setFunnelData(demoFunnelData);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("opportunities")
+        .select("stage, deal_value");
+
+      if (error) {
+        console.error("Error fetching opportunities:", error);
+        setIsLoading(false);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        // Calculate KPIs based on behavior doc rules (cumulative)
+        // Stage mapping: 0=Lead, 1=Nurture, 2=Appt Set, 3=Appt Held, 4=Signed, 5=Under Contract, 6=Closed
+        const calculatedKpis: KPIs = {
+          appointmentsHeld: data.filter(o => o.stage >= 3).length,
+          clientsSigned: data.filter(o => o.stage >= 4).length,
+          closedUnits: data.filter(o => o.stage === 6).length,
+          gci: data
+            .filter(o => o.stage === 6)
+            .reduce((sum, o) => sum + (o.deal_value || 0), 0),
+        };
+        setKpis(calculatedKpis);
+
+        // Calculate funnel data from real opportunities
+        const calculatedFunnel: FunnelStage[] = [
+          { stage: "Leads", value: data.length, width: 100 },
+          { stage: "Contacted", value: data.filter(o => o.stage >= 1).length, width: 75 },
+          { stage: "Appointments", value: data.filter(o => o.stage >= 3).length, width: 50 },
+          { stage: "Clients", value: data.filter(o => o.stage >= 4).length, width: 30 },
+          { stage: "Closed", value: data.filter(o => o.stage === 6).length, width: 20 },
+        ];
+        setFunnelData(calculatedFunnel);
+      } else {
+        // No opportunities yet - show zeros
+        setKpis({ appointmentsHeld: 0, clientsSigned: 0, closedUnits: 0, gci: 0 });
+        setFunnelData([
+          { stage: "Leads", value: 0, width: 100 },
+          { stage: "Contacted", value: 0, width: 75 },
+          { stage: "Appointments", value: 0, width: 50 },
+          { stage: "Clients", value: 0, width: 30 },
+          { stage: "Closed", value: 0, width: 20 },
+        ]);
+      }
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  // Format GCI for display
+  const formatGCI = (amount: number): string => {
+    if (amount >= 1000) {
+      return `$${Math.round(amount / 1000)}K`;
+    }
+    return `$${amount}`;
+  };
+
+  if (isLoading) {
+    return (
+      <div className="animate-fade-in flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in space-y-8 md:space-y-12">
@@ -46,57 +164,61 @@ export default function ProductionDashboard() {
         {isMobile ? (
           /* Mobile: Stacked compact cards */
           <div className="space-y-3">
-            <CircularProgress 
-              label="Appointments" 
-              current={5} 
-              target={8}
+            <CircularProgress
+              label="Appointments"
+              current={kpis.appointmentsHeld}
+              target={targets.appointments}
               compact
             />
-            <CircularProgress 
-              label="Clients Signed" 
-              current={4} 
-              target={6}
+            <CircularProgress
+              label="Clients Signed"
+              current={kpis.clientsSigned}
+              target={targets.clients}
               compact
             />
-            <CircularProgress 
-              label="Closed Units" 
-              current={2} 
-              target={5}
+            <CircularProgress
+              label="Closed Units"
+              current={kpis.closedUnits}
+              target={targets.closedUnits}
               compact
             />
-            <CircularProgress 
-              label="GCI" 
-              current="$12K" 
-              target={23000}
-              subtitle="28% to goal"
+            <CircularProgress
+              label="GCI"
+              current={formatGCI(kpis.gci)}
+              target={targets.gci}
               compact
             />
           </div>
         ) : (
           /* Desktop: Grid layout */
           <div className="grid grid-cols-4 gap-8 p-6 rounded-xl bg-card border border-border">
-            <CircularProgress 
-              label="Appointments" 
-              current={5} 
-              target={8}
+            <CircularProgress
+              label="Appointments"
+              current={kpis.appointmentsHeld}
+              target={targets.appointments}
             />
-            <CircularProgress 
-              label="Clients Signed" 
-              current={4} 
-              target={6}
+            <CircularProgress
+              label="Clients Signed"
+              current={kpis.clientsSigned}
+              target={targets.clients}
             />
-            <CircularProgress 
-              label="Closed Units" 
-              current={2} 
-              target={5}
+            <CircularProgress
+              label="Closed Units"
+              current={kpis.closedUnits}
+              target={targets.closedUnits}
             />
-            <CircularProgress 
-              label="GCI" 
-              current="$12K" 
-              target={23000}
-              subtitle="28% to goal"
+            <CircularProgress
+              label="GCI"
+              current={formatGCI(kpis.gci)}
+              target={targets.gci}
+              subtitle={`${Math.round((kpis.gci / targets.gci) * 100)}% to goal`}
             />
           </div>
+        )}
+        {!user && (
+          <p className="text-xs text-muted-foreground/60 mt-3 text-center italic">
+            Demo data • Sign in to see your production
+          </p>
         )}
       </section>
 
