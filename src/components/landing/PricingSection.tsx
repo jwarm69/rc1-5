@@ -33,7 +33,7 @@ export function PricingSection() {
             <div className="mb-6 md:mb-8">
               <span className="text-muted-foreground text-sm">RealCoach Pro</span>
               <div className="flex items-baseline justify-center gap-2 mt-2">
-                <span className="text-4xl md:text-5xl font-light text-foreground">$69</span>
+                <span className="text-4xl md:text-5xl font-light text-foreground">$99</span>
                 <span className="text-muted-foreground">/month</span>
               </div>
             </div>
