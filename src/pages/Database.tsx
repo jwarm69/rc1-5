@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ContactModal } from "@/components/database/ContactModal";
 import { CreateContactModal } from "@/components/database/CreateContactModal";
 import { AddToPipelineModal } from "@/components/database/AddToPipelineModal";
@@ -199,15 +199,14 @@ export default function Database() {
     }
   };
 
-  const fetchContacts = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        // Show demo data for unauthenticated users
-        setContacts(demoContacts);
-        return;
-      }
+  const fetchContacts = useCallback(async () => {
+    if (!user) {
+      // Show demo data for unauthenticated users
+      setContacts(demoContacts);
+      return;
+    }
 
+    try {
       const { data, error } = await supabase
         .from("contacts")
         .select("*")
@@ -243,12 +242,30 @@ export default function Database() {
     } catch (error) {
       console.error("Error fetching contacts:", error);
     }
-  };
+  }, [user]);
 
+  // Fetch data on mount and when user changes
   useEffect(() => {
     fetchContacts();
     fetchPipelineContacts();
-  }, []);
+  }, [user, fetchContacts]);
+
+  // Realtime subscription for auto-refresh
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('contacts-changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'contacts' },
+        () => fetchContacts()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, fetchContacts]);
 
   useEffect(() => {
     setIsContactOpen(selectedContact !== null);

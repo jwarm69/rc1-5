@@ -130,6 +130,23 @@ export default function ProductionDashboard() {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
+  // Realtime subscription for auto-refresh
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('production-opportunities-changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'opportunities' },
+        () => fetchDashboardData()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, fetchDashboardData]);
+
   // Format GCI for display
   const formatGCI = (amount: number): string => {
     if (amount >= 1000) {

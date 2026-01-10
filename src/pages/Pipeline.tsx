@@ -118,10 +118,10 @@ export default function Pipeline() {
           notes: o.notes ? [{ date: new Date(o.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }), content: o.notes }] : undefined,
           isDemo: false,
         }));
-        // Combine real data with demo data
-        setPipelineData([...formattedOpportunities, ...demoPipelineData]);
+        // Show only real data when user has any (no demo blending)
+        setPipelineData(formattedOpportunities);
       } else {
-        // No real data yet, show demo data
+        // No real data yet, show demo data for exploration
         setPipelineData(demoPipelineData);
       }
     } catch (error) {
@@ -134,6 +134,23 @@ export default function Pipeline() {
   // Fetch data on mount and when user changes
   useEffect(() => {
     fetchOpportunities();
+  }, [user]);
+
+  // Realtime subscription for auto-refresh
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('opportunities-changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'opportunities' },
+        () => fetchOpportunities()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
   const filteredPipelineData = pipelineData.filter((lead) => {
@@ -217,6 +234,11 @@ export default function Pipeline() {
           <p className="mt-1 text-sm text-muted-foreground">
             Current conversations.
           </p>
+          {!user && (
+            <p className="text-xs text-muted-foreground/60 mt-1 italic">
+              Demo data • Sign in to manage your pipeline
+            </p>
+          )}
         </div>
         {/* Filters */}
         <div className="flex items-center gap-3">
