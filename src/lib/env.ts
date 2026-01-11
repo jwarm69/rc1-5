@@ -1,14 +1,14 @@
 /**
  * Environment variable validation
  * Call validateEnv() at app startup to catch configuration issues early
+ *
+ * Note: LLM API keys are server-side only (set in Vercel env vars).
+ * The client uses the /api/llm proxy for all LLM requests.
  */
 
 interface EnvConfig {
   supabaseUrl: string;
   supabaseAnonKey: string;
-  llmProvider?: 'claude' | 'openai';
-  anthropicApiKey?: string;
-  openaiApiKey?: string;
 }
 
 const REQUIRED_VARS = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY'] as const;
@@ -31,17 +31,7 @@ export function validateEnv(): { valid: boolean; missing: string[]; config: EnvC
   const config: EnvConfig = {
     supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
     supabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-    llmProvider: import.meta.env.VITE_LLM_PROVIDER as 'claude' | 'openai' | undefined,
-    anthropicApiKey: import.meta.env.VITE_ANTHROPIC_API_KEY,
-    openaiApiKey: import.meta.env.VITE_OPENAI_API_KEY,
   };
-
-  // Warn if no LLM keys are configured (app will work but coaching won't)
-  if (!config.anthropicApiKey && !config.openaiApiKey) {
-    console.warn(
-      '[RealCoach.ai] No LLM API keys configured. Coaching responses will use mock data.'
-    );
-  }
 
   return { valid: true, missing: [], config };
 }

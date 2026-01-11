@@ -256,14 +256,15 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
   }, [calibration.state.userState]);
 
   // Only persist to database if user is logged in
-  const saveMessage = async (msg: Message) => {
+  const saveMessage = async (msg: Message, coachingMode?: string) => {
     if (!user) return; // Demo mode - no persistence
-    
+
     await supabase.from("chat_messages").insert({
       user_id: user.id,
       role: msg.role,
       content: msg.content,
       action_type: msg.action || null,
+      coaching_mode: coachingMode || engine.getCurrentMode(),
     });
   };
 
