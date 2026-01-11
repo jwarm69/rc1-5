@@ -8,23 +8,26 @@ Internal development documentation for the RealCoach.ai team.
 
 | Component | File(s) | Status |
 |-----------|---------|--------|
-| Coaching Types | `src/types/coaching.ts` | Complete (534 lines) |
-| Calibration State Machine | `src/lib/calibration.ts` | Complete |
-| CalibrationContext | `src/contexts/CalibrationContext.tsx` | Complete |
-| CoachingEngineContext | `src/contexts/CoachingEngineContext.tsx` | Complete |
-| Coaching Engine | `src/lib/coaching-engine.ts` | Complete |
-| Daily Action Engine | `src/lib/daily-action-engine.ts` | Complete |
-| LLM Integration | `src/lib/llm/` | Complete (6 files) |
-| Database Schema | `supabase/schema.sql` | Complete |
-| GoalsAndActions Gating | `src/pages/GoalsAndActions.tsx` | Complete |
-| CoachPanel Calibration UI | `src/components/layout/CoachPanel.tsx` | Partial |
+| Coaching Types | `src/types/coaching.ts` | ✅ Complete (534 lines) |
+| Calibration State Machine | `src/lib/calibration.ts` | ✅ Complete |
+| CalibrationContext | `src/contexts/CalibrationContext.tsx` | ✅ Complete |
+| CoachingEngineContext | `src/contexts/CoachingEngineContext.tsx` | ✅ Complete |
+| Coaching Engine | `src/lib/coaching-engine.ts` | ✅ Complete |
+| Daily Action Engine | `src/lib/daily-action-engine.ts` | ✅ Complete |
+| LLM Integration | `src/lib/llm/` | ✅ Complete (6 files) |
+| LLM Proxy (Security) | `api/llm/route.ts` | ✅ Complete (JWT auth, rate limiting) |
+| Database Schema | `supabase/schema.sql` | ✅ Complete (10 tables) |
+| GoalsAndActions Gating | `src/pages/GoalsAndActions.tsx` | ✅ Complete |
+| CoachPanel + Chat Persistence | `src/components/layout/CoachPanel.tsx` | ✅ Complete |
+| Automated Testing | `src/lib/*.test.ts` | ✅ Complete (178 tests) |
 
-### In Progress / Next Steps
+### Recently Completed (Session: Jan 11, 2026)
 
-1. **Wire LLM to CoachPanel** - Replace mock "Noted." response with real LLM calls
-2. **Supabase Integration** - Migrate from localStorage to Supabase tables
-3. **Full Coaching Flow** - Complete mode transitions in UI
-4. **Testing** - Manual and automated test coverage
+1. ✅ **Environment Standardization** - Cleaned up env vars, removed client-side LLM keys
+2. ✅ **LLM API Proxy Security** - Verified server-side only keys, JWT auth, rate limiting (20/min)
+3. ✅ **CoachPanel Chat Persistence** - Messages persist to `chat_messages` table with `coaching_mode`
+4. ✅ **Real LLM Hookup** - Mode/move context passed to prompts, streaming works
+5. ✅ **Automated Testing** - 178 tests passing (calibration, coaching-engine, client, daily-action-engine, prompts)
 
 ---
 
@@ -109,17 +112,25 @@ The coaching engine detects emotional signals in user messages:
 
 ## LLM Integration
 
-### Provider Architecture
+### Architecture
+
+The LLM integration uses a **server-side proxy** for security:
 
 ```
-src/lib/llm/
-├── types.ts           # Request/response types
-├── prompts.ts         # System prompts from behavior docs
-├── claude-adapter.ts  # Anthropic API
-├── openai-adapter.ts  # OpenAI API
-├── client.ts          # Provider-agnostic client
-└── index.ts           # Exports
+Client (browser)                    Server (Vercel)
+     │                                    │
+     ├── POST /api/llm ─────────────────►│
+     │   (JWT auth, streaming)           │
+     │                                   ├──► Claude (coaching)
+     │◄────────────────────── SSE ───────┤
+     │                                   ├──► GPT-4o-mini (acks)
+                                         │
 ```
+
+**Key files:**
+- `api/llm/route.ts` - Server-side proxy (JWT auth, rate limiting 20/min)
+- `src/lib/llm/client.ts` - Client calls proxy endpoint
+- `src/lib/llm/prompts.ts` - System prompt construction
 
 ### Usage
 
@@ -128,32 +139,27 @@ import { getLLMClient } from '@/lib/llm';
 
 const client = getLLMClient();
 
-const response = await client.generateCoachingResponse({
+// Streaming response (preferred)
+const stream = await client.generateCoachingResponseStream({
   userMessage: "I feel overwhelmed with all my leads",
-  conversationHistory: [...],
-  coachingContext: {
+  context: {
     currentMode: 'CLARIFY',
     currentMove: 'FOCUS',
-    userTone: 'COACH_CONCISE',
+    tone: 'COACH_CONCISE',
     goalsAndActions: { ... },
-    missedDayDetected: false,
   }
 });
 
-// Response includes validation
-if (response.policyViolations.length > 0) {
-  console.warn('Policy violations:', response.policyViolations);
+for await (const chunk of stream) {
+  // Handle streaming chunks
 }
 ```
 
-### Mock Mode
+### Smart Routing
 
-Without API keys, the client returns mock responses for development:
-
-```typescript
-// In development without VITE_ANTHROPIC_API_KEY or VITE_OPENAI_API_KEY
-const client = getLLMClient(); // Returns MockLLMClient
-```
+The proxy intelligently routes requests:
+- **Claude** - Coaching conversations (high quality)
+- **GPT-4o-mini** - Simple acknowledgments (cost efficient)
 
 ### System Prompt Construction
 
@@ -226,6 +232,7 @@ const message = formatForDirectMode(plan);
 
 ### Tables Overview
 
+
 | Table | Purpose |
 |-------|---------|
 | `user_calibration` | User state, tone preference, progress |
@@ -256,46 +263,50 @@ CREATE POLICY "Users can view own calibration" ON user_calibration
 
 ## Key Integration Points
 
-### Replacing Mock LLM Response
+### LLM Integration (✅ Complete)
 
-In `CoachPanel.tsx` around line 770, the hardcoded "Noted." response needs replacement:
+CoachPanel uses real LLM responses via the server-side proxy:
 
 ```typescript
-// Current (mock)
-const coachResponse = "Noted.";
-
-// Target implementation
+// src/components/layout/CoachPanel.tsx
 import { getLLMClient } from '@/lib/llm';
 
 const client = getLLMClient();
-const response = await client.generateCoachingResponse({
+const stream = await client.generateCoachingResponseStream({
   userMessage,
-  conversationHistory,
-  coachingContext: {
-    currentMode: engine.getCurrentMode(),
-    currentMove: engine.getCurrentMove(),
-    userTone: calibration.state.tone,
-    goalsAndActions: calibration.state.goalsAndActions,
-    missedDayDetected: engine.hasMissedDay,
+  context: {
+    currentMode,
+    currentMove,
+    tone,
+    goalsAndActions,
   }
 });
-const coachResponse = response.message;
 ```
 
-### Migrating to Supabase
+### Supabase Persistence (✅ Complete)
 
-Replace localStorage calls with Supabase queries:
+All data now persists to Supabase:
 
 ```typescript
-// Current (localStorage)
-localStorage.setItem('calibration', JSON.stringify(state));
+// Chat messages with coaching mode
+await supabase.from('chat_messages').insert({
+  user_id: userId,
+  role: 'user',
+  content: message,
+  coaching_mode: currentMode,
+});
+```
 
-// Target (Supabase)
-import { supabase } from '@/integrations/supabase/client';
+### Realtime Subscriptions (✅ Complete)
 
-await supabase
-  .from('user_calibration')
-  .upsert({ user_id: userId, ...state });
+Contacts and opportunities use Supabase realtime:
+
+```typescript
+const channel = supabase
+  .channel('contacts')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'contacts' },
+    (payload) => { /* handle change */ })
+  .subscribe();
 ```
 
 ---
@@ -348,25 +359,28 @@ JSON.parse(localStorage.getItem('realcoach-calibration'))
 
 ## Environment Setup
 
-### Required for Production
+### Client-Side (`.env`)
 
 ```env
+# Supabase connection (required)
 VITE_SUPABASE_URL=https://xxx.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJ...
-VITE_LLM_PROVIDER=claude
-VITE_ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-### Optional (for OpenAI instead of Claude)
+### Server-Side (Vercel Environment Variables)
+
+LLM API keys are **server-side only** (not exposed to client):
 
 ```env
-VITE_LLM_PROVIDER=openai
-VITE_OPENAI_API_KEY=sk-...
+# Set in Vercel dashboard, NOT in .env
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
 ```
 
-### Development (no API keys needed)
+### Development
 
-The app works without API keys using mock responses.
+In development, the LLM client uses the proxy which requires server-side keys.
+Run with `npm run dev` to start the Vite dev server.
 
 ---
 
@@ -437,13 +451,41 @@ The dev server will automatically find next available port (8080, 8081, etc.)
 
 ---
 
+## Testing
+
+### Commands
+
+```bash
+npm test              # Run all tests
+npm run test:watch    # Watch mode
+npm run test:coverage # Coverage report
+```
+
+### Test Coverage (178 tests)
+
+| File | Tests | Coverage |
+|------|-------|----------|
+| `calibration.test.ts` | 24 | State machine transitions |
+| `coaching-engine.test.ts` | 36 | Mode/move detection |
+| `client.test.ts` | 47 | Response validation, signal detection |
+| `daily-action-engine.test.ts` | 38 | Readiness gate, action selection |
+| `prompts.test.ts` | 33 | System prompt building |
+
+### Key Test Areas
+
+- **Response Validation**: One question max, banned words, mode-specific rules
+- **Signal Detection**: Overwhelm, externalized control, self-story, resistance
+- **Mode Transitions**: CLARIFY → REFLECT → REFRAME → COMMIT → DIRECT
+- **Action Selection**: Strategy integrity, friction boundaries
+
+---
+
 ## Next Priority Tasks
 
-1. **Wire LLM to CoachPanel** - Connect real LLM responses
-2. **Supabase Migration** - Move from localStorage to database
-3. **Complete Calibration UI** - All 7 questions in CoachPanel
-4. **Action Display** - Show daily actions from engine
-5. **Testing Suite** - Unit tests for engines
+1. **Production Deployment** - Verify Vercel env vars, test production build
+2. **Error Monitoring** - Set up Sentry or similar
+3. **E2E Testing** - Playwright or Cypress for full flow tests
+4. **Performance Optimization** - Code splitting for bundle size
 
 ---
 
@@ -451,3 +493,8 @@ The dev server will automatically find next available port (8080, 8081, etc.)
 
 - **Project Lead**: Jack Warman
 - **Development**: Erik (internal)
+
+---
+
+*Last updated: January 11, 2026*
+
