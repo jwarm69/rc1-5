@@ -92,7 +92,19 @@ export function CoachPanel({ isMobile = false }: CoachPanelProps) {
   const { user } = useAuth();
   const calibration = useCalibration();
   const engine = useCoachingEngine();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+
+  // Chat messages hook - handles loading, saving, and state management
+  const {
+    messages,
+    loadingMessages,
+    setMessages,
+    saveMessage,
+    clearMessages,
+  } = useChatMessages({
+    userId: user?.id,
+    getCurrentMode: engine.getCurrentMode,
+  });
+
   const [isGeneratingResponse, setIsGeneratingResponse] = useState(false);
   const [input, setInput] = useState("");
   const [supportOpen, setSupportOpen] = useState(false);
@@ -100,7 +112,6 @@ export function CoachPanel({ isMobile = false }: CoachPanelProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [flowData, setFlowData] = useState<FlowData>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loadingMessages, setLoadingMessages] = useState(true);
 
   // Screenshot upload states
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -160,37 +171,6 @@ export function CoachPanel({ isMobile = false }: CoachPanelProps) {
   // Screenshot flow helpers
   const currentScreenshotFlow = screenshotAction ? screenshotFlows[screenshotAction] : null;
   const currentScreenshotStepData = currentScreenshotFlow ? currentScreenshotFlow[screenshotStep] : null;
-
-  // Load messages on mount (only for logged-in users)
-  useEffect(() => {
-    if (!user) {
-      setLoadingMessages(false);
-      return;
-    }
-
-    const loadMessages = async () => {
-      const { data, error } = await supabase
-        .from("chat_messages")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: true })
-        .limit(50);
-
-      if (!error && data) {
-        setMessages(
-          data.map((m) => ({
-            id: m.id,
-            role: m.role as "coach" | "user" | "system",
-            content: m.content,
-            action: m.action_type as ActionType,
-          }))
-        );
-      }
-      setLoadingMessages(false);
-    };
-
-    loadMessages();
-  }, [user]);
 
   // Initialize calibration flow for new users
   useEffect(() => {
@@ -277,19 +257,6 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
       setMessages(prev => [...prev, confirmMsg]);
     }
   }, [calibration.state.userState]);
-
-  // Only persist to database if user is logged in
-  const saveMessage = async (msg: ChatMessage, coachingMode?: string) => {
-    if (!user) return; // Demo mode - no persistence
-
-    await supabase.from("chat_messages").insert({
-      user_id: user.id,
-      role: msg.role,
-      content: msg.content,
-      action_type: msg.action || null,
-      coaching_mode: coachingMode || engine.getCurrentMode(),
-    });
-  };
 
   // Handle missed-day choice and generate appropriate LLM response
   const handleMissedDayChoiceWithResponse = async (choice: 'UNPACK' | 'SKIP') => {
@@ -416,7 +383,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
     } else {
       setActiveAction(null);
       setFlowData({});
-      setMessages([]);
+      clearMessages();
     }
   };
 
@@ -538,7 +505,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
         setScreenshotStep(0);
         setScreenshotFlowData({});
         setUploadedImage(null);
-        setMessages([]);
+        clearMessages();
       }, 1500);
     } catch (err) {
       console.error("Save error:", err);
