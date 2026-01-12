@@ -1,36 +1,22 @@
-import { useState, useEffect, useRef, DragEvent, ChangeEvent, ClipboardEvent } from "react";
-import { Send, Sparkles, Bot, RefreshCw, FileText, Calendar, Zap, ArrowLeft, Check, ImagePlus, X, Loader2, Mail, ListChecks, TrendingUp, StickyNote, SkipForward } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Send, Sparkles, Bot, RefreshCw, FileText, Calendar, Zap, ArrowLeft, Check, ImagePlus, Loader2, Mail, ListChecks, TrendingUp, StickyNote, SkipForward } from "lucide-react";
 import { SupportFormModal } from "./SupportFormModal";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCalibration } from "@/contexts/CalibrationContext";
 import { useCoachingEngine } from "@/contexts/CoachingEngineContext";
 import { getLLMClient, LLMError } from "@/lib/llm";
-import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-
-type ActionType = "update-opportunity" | "add-note" | "schedule-meeting" | "provide-actions" | "screenshot-context" | null;
-type ScreenshotActionType = "update-stage" | "update-notes" | "draft-email" | "schedule-actions" | "add-note" | null;
-
-interface Message {
-  id: string;
-  role: "coach" | "user" | "system";
-  content: string;
-  action?: ActionType;
-  imageUrl?: string;
-}
-
-interface FlowStep {
-  field: string;
-  prompt: string;
-  type: "text" | "select" | "date" | "textarea";
-  options?: string[];
-}
-
-interface FlowData {
-  [key: string]: string;
-}
+import { useChatMessages } from "@/hooks/useChatMessages";
+import { useScreenshotUpload } from "@/hooks/useScreenshotUpload";
+import {
+  ActionType,
+  ScreenshotActionType,
+  ChatMessage,
+  FlowStep,
+  FlowData,
+} from "@/types/coach-panel";
 
 // Screenshot action options for the guided flow
 const screenshotActions = [
@@ -106,7 +92,19 @@ export function CoachPanel({ isMobile = false }: CoachPanelProps) {
   const { user } = useAuth();
   const calibration = useCalibration();
   const engine = useCoachingEngine();
-  const [messages, setMessages] = useState<Message[]>([]);
+
+  // Chat messages hook - handles loading, saving, and state management
+  const {
+    messages,
+    loadingMessages,
+    setMessages,
+    saveMessage,
+    clearMessages,
+  } = useChatMessages({
+    userId: user?.id,
+    getCurrentMode: engine.getCurrentMode,
+  });
+
   const [isGeneratingResponse, setIsGeneratingResponse] = useState(false);
   const [input, setInput] = useState("");
   const [supportOpen, setSupportOpen] = useState(false);
@@ -114,17 +112,53 @@ export function CoachPanel({ isMobile = false }: CoachPanelProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [flowData, setFlowData] = useState<FlowData>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loadingMessages, setLoadingMessages] = useState(true);
-  
+
   // Screenshot upload states
-  const [isDragging, setIsDragging] = useState(false);
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [screenshotAction, setScreenshotAction] = useState<ScreenshotActionType>(null);
   const [screenshotStep, setScreenshotStep] = useState(0);
   const [screenshotFlowData, setScreenshotFlowData] = useState<FlowData>({});
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+
+  // Screenshot flow initialization callback
+  const handleImageProcessed = useCallback((imageUrl: string) => {
+    setActiveAction("screenshot-context");
+    setScreenshotAction(null);
+    setScreenshotStep(0);
+    setScreenshotFlowData({});
+
+    // Add user message with image
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: "user",
+      content: "Screenshot uploaded",
+      imageUrl: imageUrl,
+    };
+    setMessages(prev => [...prev, userMessage]);
+
+    // Coach asks what to do with the screenshot
+    setTimeout(() => {
+      const coachMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "coach",
+        content: "Got it! What would you like me to do with this screenshot?",
+      };
+      setMessages(prev => [...prev, coachMessage]);
+    }, 500);
+  }, []);
+
+  // Screenshot upload hook
+  const {
+    isDragging,
+    uploadedImage,
+    fileInputRef,
+    setUploadedImage,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+    handleFileSelect,
+    handlePaste,
+    triggerFileSelect,
+  } = useScreenshotUpload({ onImageProcessed: handleImageProcessed });
 
   // Calibration state
   const [calibrationStarted, setCalibrationStarted] = useState(false);
@@ -137,37 +171,6 @@ export function CoachPanel({ isMobile = false }: CoachPanelProps) {
   // Screenshot flow helpers
   const currentScreenshotFlow = screenshotAction ? screenshotFlows[screenshotAction] : null;
   const currentScreenshotStepData = currentScreenshotFlow ? currentScreenshotFlow[screenshotStep] : null;
-
-  // Load messages on mount (only for logged-in users)
-  useEffect(() => {
-    if (!user) {
-      setLoadingMessages(false);
-      return;
-    }
-
-    const loadMessages = async () => {
-      const { data, error } = await supabase
-        .from("chat_messages")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: true })
-        .limit(50);
-
-      if (!error && data) {
-        setMessages(
-          data.map((m) => ({
-            id: m.id,
-            role: m.role as "coach" | "user" | "system",
-            content: m.content,
-            action: m.action_type as ActionType,
-          }))
-        );
-      }
-      setLoadingMessages(false);
-    };
-
-    loadMessages();
-  }, [user]);
 
   // Initialize calibration flow for new users
   useEffect(() => {
@@ -183,7 +186,7 @@ export function CoachPanel({ isMobile = false }: CoachPanelProps) {
     if (calibration.state.userState === 'CALIBRATING' && !calibration.state.tone && !showToneSelection) {
       setShowToneSelection(true);
       // Add welcome message
-      const welcomeMsg: Message = {
+      const welcomeMsg: ChatMessage = {
         id: 'cal-welcome',
         role: 'coach',
         content: "Welcome to RealCoach! I'm here to help you stay focused and make consistent progress toward your goals.\n\nLet's start with a few questions so I can understand what you're working toward.",
@@ -201,7 +204,7 @@ export function CoachPanel({ isMobile = false }: CoachPanelProps) {
 
       if (!hasQuestion) {
         setTimeout(() => {
-          const questionMsg: Message = {
+          const questionMsg: ChatMessage = {
             id: questionId,
             role: 'coach',
             content: calibration.currentQuestion?.question || '',
@@ -234,7 +237,7 @@ ${ga.executionStyle === 'STRUCTURED' ? 'Structured and planned' :
 
 Does this look right? Say "yes" to confirm, or tell me what to change.`;
 
-      const draftMsg: Message = {
+      const draftMsg: ChatMessage = {
         id: 'cal-draft',
         role: 'coach',
         content: draftContent,
@@ -246,7 +249,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
   // Handle G&A confirmation
   useEffect(() => {
     if (calibration.state.userState === 'G&A_CONFIRMED') {
-      const confirmMsg: Message = {
+      const confirmMsg: ChatMessage = {
         id: 'cal-confirmed',
         role: 'coach',
         content: "Your Goals & Actions are set. I'll use this to give you focused daily guidance.\n\nStarting tomorrow, I'll ask what you got done and give you your next actions. Let's make progress!",
@@ -254,19 +257,6 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
       setMessages(prev => [...prev, confirmMsg]);
     }
   }, [calibration.state.userState]);
-
-  // Only persist to database if user is logged in
-  const saveMessage = async (msg: Message, coachingMode?: string) => {
-    if (!user) return; // Demo mode - no persistence
-
-    await supabase.from("chat_messages").insert({
-      user_id: user.id,
-      role: msg.role,
-      content: msg.content,
-      action_type: msg.action || null,
-      coaching_mode: coachingMode || engine.getCurrentMode(),
-    });
-  };
 
   // Handle missed-day choice and generate appropriate LLM response
   const handleMissedDayChoiceWithResponse = async (choice: 'UNPACK' | 'SKIP') => {
@@ -277,7 +267,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
       ? "Let's talk about what happened yesterday."
       : "Let's skip that and move forward.";
 
-    const userMsg: Message = {
+    const userMsg: ChatMessage = {
       id: Date.now().toString(),
       role: "user",
       content: choiceText,
@@ -303,7 +293,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
         recentMessages,
       });
 
-      const coachResponse: Message = {
+      const coachResponse: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "coach",
         content: response.message,
@@ -316,7 +306,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
       }
     } catch (error) {
       console.error('LLM error:', error);
-      const fallback: Message = {
+      const fallback: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "coach",
         content: choice === 'UNPACK'
@@ -336,7 +326,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
     setFlowData({});
     
     const actionLabel = actionButtons.find(a => a.id === actionId)?.label || "";
-    const systemMessage: Message = {
+    const systemMessage: ChatMessage = {
       id: Date.now().toString(),
       role: "system",
       content: actionLabel,
@@ -393,102 +383,8 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
     } else {
       setActiveAction(null);
       setFlowData({});
-      setMessages([]);
+      clearMessages();
     }
-  };
-
-  // Screenshot handling functions
-  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    
-    const files = e.dataTransfer.files;
-    if (files && files[0]) {
-      processImageFile(files[0]);
-    }
-  };
-
-  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files[0]) {
-      processImageFile(files[0]);
-    }
-  };
-
-  // Handle paste events for screenshots
-  const handlePaste = (e: ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.startsWith('image/')) {
-        e.preventDefault();
-        const file = items[i].getAsFile();
-        if (file) {
-          processImageFile(file);
-        }
-        break;
-      }
-    }
-  };
-
-  const processImageFile = (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please upload an image file');
-      return;
-    }
-    
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('Image must be less than 10MB');
-      return;
-    }
-    
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const imageUrl = e.target?.result as string;
-      setUploadedImage(imageUrl);
-      startScreenshotFlow(imageUrl);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const startScreenshotFlow = (imageUrl: string) => {
-    setActiveAction("screenshot-context");
-    setScreenshotAction(null);
-    setScreenshotStep(0);
-    setScreenshotFlowData({});
-    
-    // Add user message with image
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: "Screenshot uploaded",
-      imageUrl: imageUrl,
-    };
-    setMessages(prev => [...prev, userMessage]);
-    
-    // Coach asks what to do with the screenshot
-    setTimeout(() => {
-      const coachMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "coach",
-        content: "Got it! What would you like me to do with this screenshot?",
-      };
-      setMessages(prev => [...prev, coachMessage]);
-    }, 500);
   };
 
   const handleScreenshotActionSelect = (actionId: ScreenshotActionType) => {
@@ -497,7 +393,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
     setScreenshotFlowData({});
     
     const actionLabel = screenshotActions.find(a => a.id === actionId)?.label || "";
-    const userMessage: Message = {
+    const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: "user",
       content: actionLabel,
@@ -511,7 +407,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
 
     const value = input.trim();
     
-    const userMessage: Message = {
+    const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: "user",
       content: value,
@@ -532,7 +428,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
   const handleScreenshotSelectOption = async (option: string) => {
     if (!currentScreenshotStepData || !currentScreenshotFlow) return;
 
-    const userMessage: Message = {
+    const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: "user",
       content: option,
@@ -596,7 +492,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
         }
       }
 
-      const confirmMessage: Message = {
+      const confirmMessage: ChatMessage = {
         id: Date.now().toString(),
         role: "coach",
         content: user ? "Done! I've saved that for you." : "Noted. Create an account to save permanently.",
@@ -609,7 +505,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
         setScreenshotStep(0);
         setScreenshotFlowData({});
         setUploadedImage(null);
-        setMessages([]);
+        clearMessages();
       }, 1500);
     } catch (err) {
       console.error("Save error:", err);
@@ -625,7 +521,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
 
     const value = input.trim();
     
-    const userMessage: Message = {
+    const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: "user",
       content: value,
@@ -647,7 +543,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
   const handleSelectOption = async (option: string) => {
     if (!currentStepData || !currentFlow) return;
 
-    const userMessage: Message = {
+    const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: "user",
       content: option,
@@ -717,7 +613,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
       }
 
       // Always show confirmation (demo mode or logged in)
-      const confirmMessage: Message = {
+      const confirmMessage: ChatMessage = {
         id: Date.now().toString(),
         role: "coach",
         content: user ? "Saved." : "Noted. Create an account to save permanently.",
@@ -748,7 +644,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
     // Handle calibration flow
     if (calibration.isCalibrating && input.trim()) {
       const userInput = input.trim();
-      const userMsg: Message = {
+      const userMsg: ChatMessage = {
         id: Date.now().toString(),
         role: "user",
         content: userInput,
@@ -760,7 +656,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
       if (calibration.checkForFastLane(userInput)) {
         calibration.triggerFastLane();
         setTimeout(() => {
-          const fastLaneMsg: Message = {
+          const fastLaneMsg: ChatMessage = {
             id: (Date.now() + 1).toString(),
             role: "coach",
             content: "Got it — let's keep this quick. Just 2 questions and you're in.",
@@ -794,7 +690,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
     // Handle G&A confirmation
     if (calibration.state.userState === 'G&A_DRAFTED' && input.trim()) {
       const userInput = input.trim();
-      const userMsg: Message = {
+      const userMsg: ChatMessage = {
         id: Date.now().toString(),
         role: "user",
         content: userInput,
@@ -808,7 +704,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
       } else {
         // User wants to edit
         setTimeout(() => {
-          const editMsg: Message = {
+          const editMsg: ChatMessage = {
             id: (Date.now() + 1).toString(),
             role: "coach",
             content: "What would you like to change?",
@@ -823,7 +719,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
       await handleStepSubmit();
     } else if (!activeAction && input.trim()) {
       const userInput = input;
-      const newMessage: Message = {
+      const newMessage: ChatMessage = {
         id: Date.now().toString(),
         role: "user",
         content: userInput,
@@ -854,7 +750,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
 
         // Create placeholder message immediately for streaming
         const messageId = (Date.now() + 1).toString();
-        const coachResponse: Message = {
+        const coachResponse: ChatMessage = {
           id: messageId,
           role: "coach",
           content: "",
@@ -926,7 +822,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
           }
         }
 
-        const fallback: Message = {
+        const fallback: ChatMessage = {
           id: (Date.now() + 1).toString(),
           role: "coach",
           content: fallbackContent,
@@ -1117,7 +1013,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
                 })}
                 {/* Screenshot Upload Button */}
                 <button
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={triggerFileSelect}
                   className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium bg-accent/20 text-accent border border-accent/30 hover:bg-accent/30 hover:border-accent/50 transition-all duration-200 touch-target"
                 >
                   <ImagePlus className="w-4 h-4" />
@@ -1178,7 +1074,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
               <div className="flex flex-col gap-2">
                 <button
                   onClick={() => {
-                    const userMsg: Message = { id: Date.now().toString(), role: "user", content: "Direct & Executive" };
+                    const userMsg: ChatMessage = { id: Date.now().toString(), role: "user", content: "Direct & Executive" };
                     setMessages(prev => [...prev, userMsg]);
                     calibration.setTone('DIRECT_EXECUTIVE');
                   }}
@@ -1188,7 +1084,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
                 </button>
                 <button
                   onClick={() => {
-                    const userMsg: Message = { id: Date.now().toString(), role: "user", content: "Coach-like" };
+                    const userMsg: ChatMessage = { id: Date.now().toString(), role: "user", content: "Coach-like" };
                     setMessages(prev => [...prev, userMsg]);
                     calibration.setTone('COACH_CONCISE');
                   }}
@@ -1198,7 +1094,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
                 </button>
                 <button
                   onClick={() => {
-                    const userMsg: Message = { id: Date.now().toString(), role: "user", content: "Neutral & Minimal" };
+                    const userMsg: ChatMessage = { id: Date.now().toString(), role: "user", content: "Neutral & Minimal" };
                     setMessages(prev => [...prev, userMsg]);
                     calibration.setTone('NEUTRAL_MINIMAL');
                   }}
@@ -1276,14 +1172,14 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
               <Button
                 variant="outline"
                 onClick={() => {
-                  const editMsg: Message = {
+                  const editMsg: ChatMessage = {
                     id: Date.now().toString(),
                     role: 'user',
                     content: 'I want to edit something',
                   };
                   setMessages(prev => [...prev, editMsg]);
                   setTimeout(() => {
-                    const askMsg: Message = {
+                    const askMsg: ChatMessage = {
                       id: (Date.now() + 1).toString(),
                       role: 'coach',
                       content: 'What would you like to change?',
@@ -1495,7 +1391,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
                 })}
                 {/* Screenshot Upload Button */}
                 <button
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={triggerFileSelect}
                   className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-accent/20 text-accent border border-accent/30 hover:bg-accent/30 hover:border-accent/50 transition-all duration-200"
                 >
                   <ImagePlus className="w-4 h-4" />
@@ -1556,7 +1452,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
               <div className="flex flex-col gap-2">
                 <button
                   onClick={() => {
-                    const userMsg: Message = { id: Date.now().toString(), role: "user", content: "Direct & Executive" };
+                    const userMsg: ChatMessage = { id: Date.now().toString(), role: "user", content: "Direct & Executive" };
                     setMessages(prev => [...prev, userMsg]);
                     calibration.setTone('DIRECT_EXECUTIVE');
                   }}
@@ -1566,7 +1462,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
                 </button>
                 <button
                   onClick={() => {
-                    const userMsg: Message = { id: Date.now().toString(), role: "user", content: "Coach-like" };
+                    const userMsg: ChatMessage = { id: Date.now().toString(), role: "user", content: "Coach-like" };
                     setMessages(prev => [...prev, userMsg]);
                     calibration.setTone('COACH_CONCISE');
                   }}
@@ -1576,7 +1472,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
                 </button>
                 <button
                   onClick={() => {
-                    const userMsg: Message = { id: Date.now().toString(), role: "user", content: "Neutral & Minimal" };
+                    const userMsg: ChatMessage = { id: Date.now().toString(), role: "user", content: "Neutral & Minimal" };
                     setMessages(prev => [...prev, userMsg]);
                     calibration.setTone('NEUTRAL_MINIMAL');
                   }}
@@ -1654,14 +1550,14 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
               <Button
                 variant="outline"
                 onClick={() => {
-                  const editMsg: Message = {
+                  const editMsg: ChatMessage = {
                     id: Date.now().toString(),
                     role: 'user',
                     content: 'I want to edit something',
                   };
                   setMessages(prev => [...prev, editMsg]);
                   setTimeout(() => {
-                    const askMsg: Message = {
+                    const askMsg: ChatMessage = {
                       id: (Date.now() + 1).toString(),
                       role: 'coach',
                       content: 'What would you like to change?',
