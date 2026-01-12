@@ -7,7 +7,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, ArrowRight, Check, Search, X } from "lucide-react";
+import { Plus, ArrowRight, Check, Search, X, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -77,6 +77,7 @@ export default function Database() {
   const [pipelineNames, setPipelineNames] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const { setIsContactOpen } = useDatabaseContext();
   const isMobile = useIsMobile();
 
@@ -102,6 +103,7 @@ export default function Database() {
           address: updatedContact.address || null,
           lead_source: updatedContact.leadSource || null,
           tags: updatedContact.tags || [],
+          notes: updatedContact.notes || [],
           updated_at: new Date().toISOString(),
         })
         .eq("id", updatedContact.id);
@@ -206,6 +208,7 @@ export default function Database() {
       return;
     }
 
+    setIsLoading(true);
     try {
       const { data, error } = await supabase
         .from("contacts")
@@ -214,6 +217,11 @@ export default function Database() {
 
       if (error) {
         console.error("Error fetching contacts:", error);
+        toast({
+          title: "Error loading contacts",
+          description: "Please try refreshing the page.",
+          variant: "destructive",
+        });
         return;
       }
 
@@ -229,6 +237,7 @@ export default function Database() {
           leadSource: c.lead_source || undefined,
           address: c.address || undefined,
           tags: c.tags || undefined,
+          notes: Array.isArray(c.notes) ? c.notes as ContactNote[] : undefined,
           dealHistory: c.deal_history || undefined,
           pipelineStage: c.pipeline_stage || 0,
           isInPipeline: false,
@@ -241,6 +250,8 @@ export default function Database() {
       }
     } catch (error) {
       console.error("Error fetching contacts:", error);
+    } finally {
+      setIsLoading(false);
     }
   }, [user]);
 
@@ -340,8 +351,12 @@ export default function Database() {
         </div>
       </div>
 
-      {/* Mobile: Stacked cards */}
-      {isMobile ? (
+      {/* Loading state */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : isMobile ? (
         <div className="space-y-3">
           {filteredContacts.map((contact) => {
             const inPipeline = isContactInPipeline(contact);
@@ -438,6 +453,24 @@ export default function Database() {
         </div>
       )}
 
+      {/* Empty state */}
+      {!isLoading && filteredContacts.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <p className="text-muted-foreground mb-4">
+            {user ? "No contacts yet. Create your first contact to get started." : "Sign in to manage your contacts."}
+          </p>
+          {user && (
+            <Button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="bg-primary hover:bg-primary/90 text-black font-medium"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Create Contact
+            </Button>
+          )}
+        </div>
+      )}
+
       <ContactModal
         contact={selectedContact}
         onClose={() => setSelectedContact(null)}
@@ -453,6 +486,7 @@ export default function Database() {
         open={pipelineContact !== null}
         onClose={() => setPipelineContact(null)}
         contactName={pipelineContact ? `${pipelineContact.firstName} ${pipelineContact.lastName}` : ""}
+        contactId={pipelineContact?.id}
         onSuccess={handlePipelineSuccess}
       />
     </div>

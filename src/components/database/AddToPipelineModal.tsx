@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { Check } from "lucide-react";
 
 const PIPELINE_STAGES = [
@@ -19,10 +20,12 @@ interface AddToPipelineModalProps {
   open: boolean;
   onClose: () => void;
   contactName: string;
+  contactId?: string;
   onSuccess?: () => void;
 }
 
-export function AddToPipelineModal({ open, onClose, contactName, onSuccess }: AddToPipelineModalProps) {
+export function AddToPipelineModal({ open, onClose, contactName, contactId, onSuccess }: AddToPipelineModalProps) {
+  const { user } = useAuth();
   const [selectedStage, setSelectedStage] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
@@ -45,8 +48,6 @@ export function AddToPipelineModal({ open, onClose, contactName, onSuccess }: Ad
     setIsSubmitting(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
       if (!user) {
         toast({
           title: "Authentication required",
@@ -57,11 +58,15 @@ export function AddToPipelineModal({ open, onClose, contactName, onSuccess }: Ad
         return;
       }
 
+      // Convert stage label to index (0-5) for database storage
+      const stageIndex = PIPELINE_STAGES.findIndex(s => s.value === selectedStage);
+
       const { error } = await supabase.from("opportunities").insert({
         user_id: user.id,
+        contact_id: contactId || null,
         contact_name: contactName,
-        status: selectedStage,
-        deal_amount: null,
+        stage: stageIndex >= 0 ? stageIndex : 0,
+        deal_value: null,
         notes: `Added to pipeline from contacts on ${new Date().toLocaleDateString()}`,
       });
 

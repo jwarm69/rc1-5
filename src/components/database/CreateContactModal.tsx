@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { z } from "zod";
 
 const contactSchema = z.object({
@@ -21,6 +22,7 @@ interface CreateContactModalProps {
 }
 
 export function CreateContactModal({ open, onClose, onContactCreated }: CreateContactModalProps) {
+  const { user } = useAuth();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
@@ -68,8 +70,6 @@ export function CreateContactModal({ open, onClose, onContactCreated }: CreateCo
     setIsSubmitting(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
       if (!user) {
         toast({
           title: "Authentication required",

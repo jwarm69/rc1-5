@@ -5,6 +5,7 @@ import { useDatabaseContext } from "@/contexts/DatabaseContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Search, X, Filter, Loader2 } from "lucide-react";
@@ -23,7 +24,7 @@ interface PipelineLead {
   gci: number;
   estClose: string;
   status: string;
-  dealType: "Buy" | "Sell";
+  dealType: "Buy" | "Sell" | "Lease" | "Referral";
   source: string;
   phone?: string;
   email?: string;
@@ -71,6 +72,7 @@ const statusColors: Record<string, string> = {
 
 export default function Pipeline() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [pipelineData, setPipelineData] = useState<PipelineLead[]>(demoPipelineData);
   const [selectedLead, setSelectedLead] = useState<PipelineLead | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -100,6 +102,11 @@ export default function Pipeline() {
 
       if (error) {
         console.error("Error fetching opportunities:", error);
+        toast({
+          title: "Error loading pipeline",
+          description: "Please try refreshing the page.",
+          variant: "destructive",
+        });
         return;
       }
 
@@ -113,19 +120,24 @@ export default function Pipeline() {
             ? new Date(o.expected_close_date).toLocaleDateString("en-US", { month: "short", year: "numeric" })
             : "TBD",
           status: PIPELINE_STATUSES[o.stage] || "Initial Contact",
-          dealType: "Buy" as const, // Default, could be stored in DB
-          source: "Database",
+          dealType: (o.deal_type as "Buy" | "Sell" | "Lease" | "Referral") || "Buy",
+          source: o.source || "Database",
           notes: o.notes ? [{ date: new Date(o.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }), content: o.notes }] : undefined,
           isDemo: false,
         }));
         // Show only real data when user has any (no demo blending)
         setPipelineData(formattedOpportunities);
       } else {
-        // No real data yet, show demo data for exploration
-        setPipelineData(demoPipelineData);
+        // Authenticated user with no real data - show empty state
+        setPipelineData([]);
       }
     } catch (error) {
       console.error("Error fetching opportunities:", error);
+      toast({
+        title: "Error loading pipeline",
+        description: "Please try refreshing the page.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -210,11 +222,21 @@ export default function Pipeline() {
 
         if (error) {
           console.error("Error updating opportunity status:", error);
+          toast({
+            title: "Error updating status",
+            description: "Changes reverted. Please try again.",
+            variant: "destructive",
+          });
           // Revert on error
           fetchOpportunities();
         }
       } catch (error) {
         console.error("Error updating opportunity status:", error);
+        toast({
+          title: "Error updating status",
+          description: "Changes reverted. Please try again.",
+          variant: "destructive",
+        });
         fetchOpportunities();
       }
     }
@@ -500,6 +522,17 @@ export default function Pipeline() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!isLoading && filteredPipelineData.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <p className="text-muted-foreground mb-4">
+            {user
+              ? "No opportunities in your pipeline yet. Add a contact to the pipeline to get started."
+              : "Sign in to manage your pipeline."}
+          </p>
         </div>
       )}
 

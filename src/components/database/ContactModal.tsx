@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { X, Mail, Upload, RefreshCw, Calendar, CheckSquare, Pencil, Trash2, Save } from "lucide-react";
+import { X, Mail, Upload, RefreshCw, Calendar, CheckSquare, Pencil, Trash2, Save, Plus } from "lucide-react";
 import { StageTracker } from "./StageTracker";
 import { ActivityTimeline } from "./ActivityTimeline";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -53,12 +54,28 @@ export function ContactModal({ contact, onClose, onUpdate, onDelete }: ContactMo
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editedContact, setEditedContact] = useState<Contact | null>(null);
+  const [newNoteContent, setNewNoteContent] = useState("");
 
   // Reset edit state when contact changes
   useEffect(() => {
     setIsEditing(false);
     setEditedContact(contact);
+    setNewNoteContent("");
   }, [contact]);
+
+  // Add a new note to the contact
+  const handleAddNote = () => {
+    if (!editedContact || !newNoteContent.trim()) return;
+
+    const newNote = {
+      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      content: newNoteContent.trim(),
+    };
+
+    const updatedNotes = [newNote, ...(editedContact.notes || [])];
+    setEditedContact({ ...editedContact, notes: updatedNotes });
+    setNewNoteContent("");
+  };
 
   const handleEdit = () => {
     if (contact?.isDemo) return;
@@ -343,11 +360,35 @@ export function ContactModal({ contact, onClose, onUpdate, onDelete }: ContactMo
             </div>
           )}
 
-          {contact.notes && contact.notes.length > 0 && (
+          {/* Notes Section - always show in edit mode, otherwise only if notes exist */}
+          {(isEditing || (contact.notes && contact.notes.length > 0)) && (
             <div className="px-5 md:px-8 py-5 border-t border-border/20">
               <h3 className="text-xs text-primary/80 uppercase tracking-wider mb-4 font-medium">Notes</h3>
+
+              {/* Add Note Form - only in edit mode */}
+              {isEditing && editedContact && (
+                <div className="mb-4 space-y-2">
+                  <Textarea
+                    value={newNoteContent}
+                    onChange={(e) => setNewNoteContent(e.target.value)}
+                    placeholder="Add a note..."
+                    className="bg-secondary/50 border-border min-h-[80px] text-sm"
+                  />
+                  <Button
+                    onClick={handleAddNote}
+                    disabled={!newNoteContent.trim()}
+                    size="sm"
+                    className="bg-primary hover:bg-primary/90 text-black font-medium"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    Add Note
+                  </Button>
+                </div>
+              )}
+
+              {/* Display notes */}
               <div className="space-y-4">
-                {contact.notes.map((note, i) => (
+                {(isEditing ? editedContact?.notes : contact.notes)?.map((note, i) => (
                   <div key={i} className="space-y-1">
                     <p className="text-xs text-muted-foreground/50 font-medium">{note.date}</p>
                     <p className="text-sm text-foreground/70 leading-relaxed">{note.content}</p>
