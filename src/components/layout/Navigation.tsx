@@ -1,5 +1,5 @@
 import { NavLink, useLocation, Link } from "react-router-dom";
-import { Home, Target, FileText, GitBranch, BarChart3, Database, Menu, X, UserPlus, CalendarCheck } from "lucide-react";
+import { Home, Target, FileText, GitBranch, BarChart3, Database, Settings, Menu, X, UserPlus, CalendarCheck } from "lucide-react";
 import { useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
@@ -11,6 +11,7 @@ const demoNavItems = [
   { path: "/demo/pipeline", label: "Pipeline", icon: GitBranch },
   { path: "/demo/production", label: "Production", icon: BarChart3 },
   { path: "/demo/database", label: "Database", icon: Database },
+  { path: "/demo/settings", label: "Settings", icon: Settings },
 ];
 
 export function Navigation() {
