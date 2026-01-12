@@ -308,7 +308,70 @@ CREATE INDEX IF NOT EXISTS idx_action_items_date ON action_items(action_date);
 CREATE INDEX IF NOT EXISTS idx_action_items_status ON action_items(status);
 
 -- ============================================================================
--- 12. ROW LEVEL SECURITY
+-- 12. MAILCHIMP CONNECTIONS
+-- Stores user's Mailchimp OAuth connection
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS mailchimp_connections (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE NOT NULL,
+
+  -- OAuth tokens
+  access_token text NOT NULL,
+  server_prefix text NOT NULL,  -- e.g., "us19"
+
+  -- Audience selection
+  audience_id text,
+  audience_name text,
+
+  -- Status tracking
+  sync_status text DEFAULT 'active' CHECK (sync_status IN ('active', 'paused', 'error')),
+  last_sync_at timestamptz,
+  last_error text,
+
+  -- Timestamps
+  connected_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+-- Index for quick lookups
+CREATE INDEX IF NOT EXISTS idx_mailchimp_connections_user_id ON mailchimp_connections(user_id);
+
+-- ============================================================================
+-- 13. MAILCHIMP SYNC QUEUE
+-- Queue for pending sync operations with retry logic
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS mailchimp_sync_queue (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  contact_id uuid REFERENCES contacts(id) ON DELETE CASCADE NOT NULL,
+
+  -- Operation details
+  operation text NOT NULL CHECK (operation IN ('create', 'update', 'delete')),
+  payload jsonb,  -- Stores contact data for delete operations
+
+  -- Retry tracking
+  attempts int DEFAULT 0,
+  max_attempts int DEFAULT 5,
+  last_error text,
+  next_retry_at timestamptz DEFAULT now(),
+
+  -- Status
+  completed_at timestamptz,
+
+  -- Timestamps
+  created_at timestamptz DEFAULT now()
+);
+
+-- Indexes for queue processing
+CREATE INDEX IF NOT EXISTS idx_mailchimp_sync_queue_user_id ON mailchimp_sync_queue(user_id);
+CREATE INDEX IF NOT EXISTS idx_mailchimp_sync_queue_pending ON mailchimp_sync_queue(next_retry_at)
+  WHERE completed_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_mailchimp_sync_queue_contact ON mailchimp_sync_queue(contact_id);
+
+-- ============================================================================
+-- 14. ROW LEVEL SECURITY
 -- Ensure users can only access their own data
 -- ============================================================================
 
@@ -323,6 +386,8 @@ ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE opportunities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE action_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mailchimp_connections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mailchimp_sync_queue ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for user_calibration
 DROP POLICY IF EXISTS "Users can view own calibration" ON user_calibration;
@@ -374,8 +439,18 @@ DROP POLICY IF EXISTS "Users can CRUD own actions" ON action_items;
 CREATE POLICY "Users can CRUD own actions" ON action_items
   FOR ALL USING (auth.uid() = user_id);
 
+-- Create policies for mailchimp_connections
+DROP POLICY IF EXISTS "Users can CRUD own mailchimp connection" ON mailchimp_connections;
+CREATE POLICY "Users can CRUD own mailchimp connection" ON mailchimp_connections
+  FOR ALL USING (auth.uid() = user_id);
+
+-- Create policies for mailchimp_sync_queue
+DROP POLICY IF EXISTS "Users can view own sync queue" ON mailchimp_sync_queue;
+CREATE POLICY "Users can view own sync queue" ON mailchimp_sync_queue
+  FOR ALL USING (auth.uid() = user_id);
+
 -- ============================================================================
--- 13. UPDATED_AT TRIGGERS
+-- 15. UPDATED_AT TRIGGERS
 -- Automatically update the updated_at timestamp
 -- ============================================================================
 
@@ -420,6 +495,12 @@ CREATE TRIGGER update_opportunities_updated_at
 DROP TRIGGER IF EXISTS update_action_items_updated_at ON action_items;
 CREATE TRIGGER update_action_items_updated_at
   BEFORE UPDATE ON action_items
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger for mailchimp_connections
+DROP TRIGGER IF EXISTS update_mailchimp_connections_updated_at ON mailchimp_connections;
+CREATE TRIGGER update_mailchimp_connections_updated_at
+  BEFORE UPDATE ON mailchimp_connections
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================

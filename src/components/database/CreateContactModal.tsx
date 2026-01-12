@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { z } from "zod";
+import { enqueueSync } from "@/lib/mailchimp-sync";
 
 const contactSchema = z.object({
   firstName: z.string().trim().min(1, "First name is required").max(100),
@@ -80,17 +81,25 @@ export function CreateContactModal({ open, onClose, onContactCreated }: CreateCo
         return;
       }
 
-      const { error } = await supabase.from("contacts").insert({
+      const { data: newContact, error } = await supabase.from("contacts").insert({
         user_id: user.id,
         first_name: result.data.firstName,
         last_name: result.data.lastName,
         phone: result.data.phone || null,
         email: result.data.email || null,
         last_contacted: new Date().toISOString(),
-      });
+      }).select('id, email').single();
 
       if (error) {
         throw error;
+      }
+
+      // Queue for Mailchimp sync if contact has email
+      if (newContact && newContact.email) {
+        enqueueSync(user.id, newContact.id, 'create').catch((syncError) => {
+          // Log but don't fail - sync will retry
+          console.warn('Failed to queue Mailchimp sync:', syncError);
+        });
       }
 
       toast({

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Plus, ArrowRight, Check, Search, X, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { enqueueSync } from "@/lib/mailchimp-sync";
 
 interface ContactNote {
   date: string;
@@ -110,6 +111,14 @@ export default function Database() {
 
       if (error) throw error;
 
+      // Queue for Mailchimp sync if contact has email
+      if (user && updatedContact.email) {
+        enqueueSync(user.id, updatedContact.id, 'update').catch((syncError) => {
+          // Log but don't fail - sync will retry
+          console.warn('Failed to queue Mailchimp sync:', syncError);
+        });
+      }
+
       toast({
         title: "Contact updated",
         description: `${updatedContact.firstName} ${updatedContact.lastName} has been updated.`,
@@ -141,6 +150,15 @@ export default function Database() {
     }
 
     try {
+      // Queue for Mailchimp deletion BEFORE deleting from DB
+      // (need email in payload since contact will be gone)
+      if (user && contact?.email) {
+        await enqueueSync(user.id, contactId, 'delete', { email: contact.email }).catch((syncError) => {
+          // Log but don't block delete
+          console.warn('Failed to queue Mailchimp delete:', syncError);
+        });
+      }
+
       const { error } = await supabase
         .from("contacts")
         .delete()

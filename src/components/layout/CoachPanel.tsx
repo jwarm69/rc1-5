@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { Send, Sparkles, Bot, RefreshCw, FileText, Calendar, Zap, ArrowLeft, Check, ImagePlus, Loader2, Mail, ListChecks, TrendingUp, StickyNote, SkipForward } from "lucide-react";
+import { Send, Sparkles, Bot, RefreshCw, FileText, Calendar, Zap, ArrowLeft, Check, ImagePlus, Loader2, Mail, ListChecks, TrendingUp, StickyNote, SkipForward, AlertTriangle } from "lucide-react";
+import { Link } from "react-router-dom";
 import { SupportFormModal } from "./SupportFormModal";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -130,6 +131,30 @@ export function CoachPanel({ isMobile = false }: CoachPanelProps) {
   const [screenshotAction, setScreenshotAction] = useState<ScreenshotActionType>(null);
   const [screenshotStep, setScreenshotStep] = useState(0);
   const [screenshotFlowData, setScreenshotFlowData] = useState<FlowData>({});
+
+  // Mailchimp sync error state (non-blocking notification)
+  const [mailchimpSyncError, setMailchimpSyncError] = useState(false);
+
+  // Check for Mailchimp sync errors (once on mount, non-blocking)
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const checkSyncStatus = async () => {
+      try {
+        const { data } = await supabase
+          .from('mailchimp_connections')
+          .select('sync_status')
+          .eq('user_id', user.id)
+          .single();
+
+        setMailchimpSyncError(data?.sync_status === 'error');
+      } catch {
+        // Silently ignore - user may not have a connection
+      }
+    };
+
+    checkSyncStatus();
+  }, [user?.id]);
 
   // Screenshot flow initialization callback - NEW AI interpretation flow
   const handleImageProcessed = useCallback(async (imageUrl: string) => {
@@ -1231,7 +1256,20 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
             </div>
           </div>
         )}
-        
+
+        {/* Mailchimp sync error notification - subtle, non-blocking (mobile) */}
+        {mailchimpSyncError && (
+          <div className="px-5 py-2 bg-amber-500/10 border-b border-amber-500/20">
+            <Link
+              to="/demo/settings"
+              className="flex items-center gap-2 text-xs text-amber-500 hover:text-amber-400 transition-colors"
+            >
+              <AlertTriangle className="w-3 h-3" />
+              <span>Mailchimp sync paused</span>
+            </Link>
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-5">
           {loadingMessages && (
             <div className="text-center text-muted-foreground text-sm">Loading...</div>
@@ -1647,6 +1685,19 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
             )}
           </div>
         </div>
+
+        {/* Mailchimp sync error notification - subtle, non-blocking */}
+        {mailchimpSyncError && (
+          <div className="px-5 py-2 bg-amber-500/10 border-b border-amber-500/20">
+            <Link
+              to="/demo/settings"
+              className="flex items-center gap-2 text-xs text-amber-500 hover:text-amber-400 transition-colors"
+            >
+              <AlertTriangle className="w-3 h-3" />
+              <span>Mailchimp sync paused</span>
+            </Link>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-5">
           {loadingMessages && (

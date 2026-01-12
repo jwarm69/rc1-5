@@ -24,6 +24,7 @@ import BusinessPlan from "./pages/BusinessPlan";
 import Pipeline from "./pages/Pipeline";
 import ProductionDashboard from "./pages/ProductionDashboard";
 import Database from "./pages/Database";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -57,6 +58,7 @@ const App = () => (
                       <Route path="pipeline" element={<Pipeline />} />
                       <Route path="production" element={<ProductionDashboard />} />
                       <Route path="database" element={<Database />} />
+                      <Route path="settings" element={<Settings />} />
                     </Routes>
                   </MainLayout>
                 } />

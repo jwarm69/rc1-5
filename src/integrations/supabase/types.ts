@@ -531,6 +531,113 @@ export type Database = {
           }
         ]
       }
+      mailchimp_connections: {
+        Row: {
+          id: string
+          user_id: string
+          access_token: string
+          server_prefix: string
+          audience_id: string | null
+          audience_name: string | null
+          sync_status: string
+          last_sync_at: string | null
+          last_error: string | null
+          connected_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          access_token: string
+          server_prefix: string
+          audience_id?: string | null
+          audience_name?: string | null
+          sync_status?: string
+          last_sync_at?: string | null
+          last_error?: string | null
+          connected_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          access_token?: string
+          server_prefix?: string
+          audience_id?: string | null
+          audience_name?: string | null
+          sync_status?: string
+          last_sync_at?: string | null
+          last_error?: string | null
+          connected_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mailchimp_connections_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      mailchimp_sync_queue: {
+        Row: {
+          id: string
+          user_id: string
+          contact_id: string
+          operation: string
+          payload: Json | null
+          attempts: number
+          max_attempts: number
+          last_error: string | null
+          next_retry_at: string
+          completed_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          contact_id: string
+          operation: string
+          payload?: Json | null
+          attempts?: number
+          max_attempts?: number
+          last_error?: string | null
+          next_retry_at?: string
+          completed_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          contact_id?: string
+          operation?: string
+          payload?: Json | null
+          attempts?: number
+          max_attempts?: number
+          last_error?: string | null
+          next_retry_at?: string
+          completed_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mailchimp_sync_queue_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mailchimp_sync_queue_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
