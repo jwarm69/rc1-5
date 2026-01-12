@@ -118,6 +118,7 @@ CLARIFY → REFLECT → REFRAME → COMMIT → DIRECT
 ## Git History (Recent)
 
 ```
+1879197 Wire UI to Supabase persistence (Phase 4)
 20948b9 Add comprehensive test coverage for LLM client, daily action engine, and prompts
 79164b3 Add testing infrastructure and production readiness improvements
 6ca48f0 Update pricing to $99/month
@@ -126,11 +127,74 @@ bd123c2 Add UX polish: demo data handling and realtime subscriptions
 
 ---
 
+## Sprint 2: Phase 4 - UI Persistence (January 11, 2026)
+
+### Overview
+Wired Database, Pipeline, and related UI components to Supabase for full data persistence. Phase 1 (database foundation) was already complete with all 10 tables and RLS policies in place.
+
+### Completed Tasks
+
+#### Task 1: Fix AddToPipelineModal Column Names (CRITICAL)
+- [x] Fixed broken column names: `status` → `stage`, `deal_amount` → `deal_value`
+- [x] Added `contact_id` prop for proper contact-opportunity linking
+- [x] Stage now stored as index (0-5) matching database schema
+
+#### Task 2: Fix Pipeline Data Transformation
+- [x] Read `deal_type` from DB instead of hardcoding `"Buy"`
+- [x] Read `source` from DB instead of hardcoding `"Database"`
+
+#### Task 3: Add Loading State to Database Page
+- [x] Added `isLoading` state with Loader2 spinner
+- [x] Shows centered loading indicator while fetching contacts
+
+#### Task 4: Implement Contact Notes Persistence
+- [x] Added note editor UI in ContactModal (Textarea + Add Note button)
+- [x] Notes stored as JSONB array: `[{date: string, content: string}]`
+- [x] Notes persist on contact update
+
+#### Task 5: Standardize Auth Checks
+- [x] Replaced `supabase.auth.getUser()` with `useAuth()` context in all modals
+- [x] Consistent auth pattern across CreateContactModal and AddToPipelineModal
+
+#### Task 6 & 7: Calibration & Goals/Actions Persistence
+- [x] Already implemented via `useSupabaseCalibration` hook
+- [x] Saves to `user_calibration` and `user_goals_actions` tables
+
+#### Task 8: Add Demo Data Tagging + Empty States
+- [x] Empty state UI for authenticated users with no contacts/opportunities
+- [x] No demo data blending for authenticated users
+
+#### Task 9: Add Error Handling & Toast Notifications
+- [x] Toast notifications for all CRUD operations
+- [x] Error catching with user-friendly messages
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `src/components/database/AddToPipelineModal.tsx` | Fix column names, add contactId, standardize auth |
+| `src/components/database/ContactModal.tsx` | Add note editing capability |
+| `src/components/database/CreateContactModal.tsx` | Standardize auth to useAuth() |
+| `src/pages/Database.tsx` | Add loading/empty states, notes persistence, error handling |
+| `src/pages/Pipeline.tsx` | Fix data transformation, empty states, toast notifications |
+
+### Verification Checklist
+
+- [x] TypeScript check passes (`npx tsc --noEmit`)
+- [x] Build succeeds (`npm run build`)
+- [ ] Create contact → persists after refresh
+- [ ] Update contact with notes → persists after refresh
+- [ ] Delete contact → removed after refresh
+- [ ] Add to pipeline → creates opportunity with correct stage
+- [ ] Pipeline stage changes persist
+
+---
+
 ## Next Steps (Suggested)
 
-1. **Manual Verification** - Walk through calibration → G&A → daily actions flow
-2. **Production Deployment** - Verify Vercel env vars, test production build
-3. **Remaining Test Coverage** - Add tests for `calibration.ts` and `coaching-engine.ts` to reach 80%+
+1. **Manual Verification** - Test the persistence verification checklist above
+2. **Production Deployment** - Push changes and verify on Vercel
+3. **Remaining Test Coverage** - Add tests for new persistence logic
 4. **Error Monitoring** - Set up Sentry or similar
 
 ---
@@ -143,4 +207,4 @@ bd123c2 Add UX polish: demo data handling and realtime subscriptions
 
 ---
 
-*Last updated: January 11, 2026*
+*Last updated: January 11, 2026 (Sprint 2 added)*
