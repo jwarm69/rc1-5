@@ -182,20 +182,35 @@ Wired Database, Pipeline, and related UI components to Supabase for full data pe
 
 - [x] TypeScript check passes (`npx tsc --noEmit`)
 - [x] Build succeeds (`npm run build`)
-- [ ] Create contact → persists after refresh
-- [ ] Update contact with notes → persists after refresh
-- [ ] Delete contact → removed after refresh
-- [ ] Add to pipeline → creates opportunity with correct stage
-- [ ] Pipeline stage changes persist
+- [ ] Create contact → persists after refresh *(pending manual verification)*
+- [ ] Update contact with notes → persists after refresh *(pending manual verification)*
+- [ ] Delete contact → removed after refresh *(pending manual verification)*
+- [ ] Add to pipeline → creates opportunity with correct stage *(pending manual verification)*
+- [ ] Pipeline stage changes persist *(pending manual verification)*
+
+**Note**: Manual persistence tests pending as of January 12, 2026. Test at localhost:8080 with authenticated user.
 
 ---
 
 ## Next Steps (Suggested)
 
 1. **Manual Verification** - Test the persistence verification checklist above
-2. **Production Deployment** - Push changes and verify on Vercel
-3. **Remaining Test Coverage** - Add tests for new persistence logic
-4. **Error Monitoring** - Set up Sentry or similar
+2. **Google OAuth Configuration** - Enable Google sign-in:
+   - Configure Google Cloud OAuth credentials
+   - Enable Google provider in Supabase Dashboard (Authentication → Providers)
+   - Code already implemented in `src/pages/Auth.tsx:handleGoogleSignIn()`
+3. **Production Deployment** - Push changes and verify on Vercel
+4. **Remaining Test Coverage** - Add tests for new persistence logic
+5. **Error Monitoring** - Set up Sentry or similar
+
+---
+
+## Doc Alignment (January 12, 2026)
+
+The following docs were updated to reflect completed work:
+- `docs/PROGRESS_REPORT.md` - Updated to show all phases complete
+- `tasks/IMPLEMENTATION_ROADMAP.md` - Marked all 5 phases as ✅ Complete
+- `CLAUDE.md` - Fixed stale instructions (localStorage → Supabase, added testing info)
 
 ---
 
