@@ -11,6 +11,7 @@ AI-powered coaching platform for solo real estate agents. Provides calm, clear, 
 - **Goals & Actions (G&A)** - Annual goals, monthly milestones, friction boundaries
 - **Business Plan** - Optional detailed business planning module
 - **Pipeline Management** - Contact and opportunity tracking
+- **Mailchimp Sync** - One-way contact sync to Mailchimp with OAuth connection
 - **No Urgency Design** - No streaks, timers, or guilt-inducing UI elements
 
 ## Tech Stack
@@ -80,6 +81,7 @@ VITE_OPENAI_API_KEY=sk-...
 │   ├── calibration.ts            # Calibration state machine
 │   ├── coaching-engine.ts        # Coaching mode/move logic
 │   ├── daily-action-engine.ts    # Action selection
+│   ├── mailchimp-sync.ts         # Mailchimp one-way sync
 │   └── llm/                      # LLM integration
 ├── hooks/               # Custom React hooks
 ├── pages/               # Route pages
@@ -129,7 +131,8 @@ CLARIFY → REFLECT → REFRAME → COMMIT → DIRECT
 2. **Coaching Engine** - Mode transitions, coaching moves (Focus, Agency, Identity, Ease)
 3. **Daily Action Engine** - Max 1 primary + 2 supporting, no backlogs
 4. **Screenshot Interpretation** - Vision AI analysis with confirmation before signal generation
-5. **LLM Integration** - Provider-agnostic, enforces coaching rules
+5. **Mailchimp Sync** - One-way sync (RealCoach → Mailchimp) with queue-based retry
+6. **LLM Integration** - Provider-agnostic, enforces coaching rules
 
 ## Non-Negotiable Behavior Rules
 

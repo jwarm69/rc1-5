@@ -27,6 +27,7 @@ This file provides guidance to Claude Code when working with this repository.
 │   ├── ui/              # shadcn-ui components (40+)
 │   ├── chat/            # InterpretationCard, UploadPreview, ClarificationPrompt
 │   ├── database/        # Contact/opportunity modals
+│   ├── settings/        # MailchimpConnection component
 │   ├── goals/           # GoalCard components
 │   └── actions/         # ActionCard components
 ├── contexts/            # React contexts
@@ -42,6 +43,7 @@ This file provides guidance to Claude Code when working with this repository.
 │   ├── daily-action-engine.ts    # Action selection
 │   ├── screenshot-interpreter.ts # Vision AI interpretation pipeline
 │   ├── signal-handler.ts         # Screenshot signal processing
+│   ├── mailchimp-sync.ts         # Mailchimp one-way sync library
 │   ├── env.ts                    # Environment validation
 │   └── llm/                      # LLM integration
 │       ├── client.ts             # Calls server proxy + Vision API
@@ -61,13 +63,17 @@ This file provides guidance to Claude Code when working with this repository.
     └── supabase/        # Supabase client + types
 
 /api
-└── llm/route.ts         # Vercel Edge Function (JWT auth, rate limiting)
+├── llm/route.ts         # Vercel Edge Function (JWT auth, rate limiting)
+└── mailchimp/           # Mailchimp OAuth endpoints
+    ├── auth.ts          # OAuth initiation
+    ├── callback.ts      # OAuth callback handler
+    └── disconnect.ts    # Disconnect handler
 
 /docs
 └── behavior/            # AI behavior documentation (9 modules)
 
 /supabase
-└── schema.sql           # Database schema (10 tables)
+└── schema.sql           # Database schema (12 tables)
 ```
 
 ## Development Commands
@@ -124,7 +130,14 @@ UNINITIALIZED → CALIBRATING → G&A_DRAFTED → G&A_CONFIRMED → ACTIONS_ACTI
    - Signal generation for Daily Action Engine
    - **Confirmation required** before signals generated
 
-6. **Data Persistence** (Supabase)
+6. **Mailchimp Sync** (`src/lib/mailchimp-sync.ts`)
+   - **One-way sync**: RealCoach → Mailchimp only
+   - OAuth connection via Settings page
+   - Automatic sync on contact create/update/delete
+   - Queue-based with exponential backoff retry
+   - Silent failure handling (non-blocking notifications)
+
+7. **Data Persistence** (Supabase)
    - 10 tables with Row Level Security
    - Realtime subscriptions for contacts/opportunities
    - Chat messages persist with `coaching_mode`
@@ -141,6 +154,8 @@ UNINITIALIZED → CALIBRATING → G&A_DRAFTED → G&A_CONFIRMED → ACTIONS_ACTI
 | `api/llm/route.ts` | Server-side LLM proxy (security) |
 | `src/lib/screenshot-interpreter.ts` | Vision AI interpretation pipeline |
 | `src/contexts/UploadContext.tsx` | Screenshot upload state machine |
+| `src/lib/mailchimp-sync.ts` | Mailchimp sync library (~650 lines) |
+| `src/components/settings/MailchimpConnection.tsx` | Mailchimp settings UI |
 | `docs/behavior/*.md` | AI behavior specifications |
 
 ## Non-Negotiable Behavior Rules
@@ -176,7 +191,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 ```
 
-## Database Schema (10 Tables)
+## Database Schema (12 Tables)
 
 | Table | Purpose |
 |-------|---------|
@@ -190,6 +205,8 @@ OPENAI_API_KEY=sk-...
 | `opportunities` | Sales pipeline deals |
 | `chat_messages` | Conversation history with `coaching_mode` |
 | `action_items` | Daily actions with full structure |
+| `mailchimp_connections` | OAuth tokens, audience selection, sync status |
+| `mailchimp_sync_queue` | Pending sync operations with retry tracking |
 
 All tables have:
 - Row Level Security (`auth.uid() = user_id`)

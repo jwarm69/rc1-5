@@ -329,4 +329,111 @@ UPLOAD_IDLE (reset, no signals)
 
 ---
 
-*Last updated: January 12, 2026 (Sprint 3 added)*
+## Sprint 4: Mailchimp Sync v1 (January 12, 2026)
+
+### Overview
+Implemented one-way contact sync from RealCoach to Mailchimp. RealCoach is always the source of truth - no data flows from Mailchimp back to RealCoach. Includes OAuth connection flow, audience selection, automatic sync on contact CRUD, and silent failure handling.
+
+### Key Features
+
+1. **OAuth Connection Flow**
+   - Connect Mailchimp via OAuth 2.0 from Settings page
+   - CSRF protection via state parameter
+   - Secure token storage in Supabase
+
+2. **Audience Selection**
+   - Fetch user's Mailchimp audiences after connection
+   - Auto-select if only one audience exists
+   - Queue initial sync of all contacts on selection
+
+3. **Automatic Sync Triggers**
+   - Contact create → queues sync
+   - Contact update → queues sync
+   - Contact delete → queues sync (with email preserved in payload)
+
+4. **Sync Queue with Retry Logic**
+   - Exponential backoff: 1s, 2s, 4s, 8s, 16s
+   - Max 5 attempts before marking failed
+   - Deduplication of pending operations
+
+5. **Silent Failure Handling**
+   - Subtle notification in CoachPanel (amber indicator)
+   - Links to Settings to fix issues
+   - No interrupting user workflow
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `api/mailchimp/auth.ts` | OAuth initiation endpoint |
+| `api/mailchimp/callback.ts` | OAuth callback handler |
+| `api/mailchimp/disconnect.ts` | Disconnect endpoint |
+| `src/lib/mailchimp-sync.ts` | Core sync library (~650 lines) |
+| `src/components/settings/MailchimpConnection.tsx` | Settings UI component |
+| `src/pages/Settings.tsx` | Settings page |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `supabase/schema.sql` | Added `mailchimp_connections` + `mailchimp_sync_queue` tables |
+| `src/integrations/supabase/types.ts` | Added TypeScript types for new tables |
+| `src/components/database/CreateContactModal.tsx` | Queue sync on contact create |
+| `src/pages/Database.tsx` | Queue sync on contact update/delete |
+| `src/components/layout/CoachPanel.tsx` | Added sync error notification |
+| `src/components/layout/Navigation.tsx` | Added Settings nav link |
+| `src/App.tsx` | Added Settings route |
+
+### Database Tables Added
+
+| Table | Purpose |
+|-------|---------|
+| `mailchimp_connections` | OAuth tokens, audience selection, sync status |
+| `mailchimp_sync_queue` | Pending sync operations with retry tracking |
+
+### Design Decisions
+
+- **One-way sync only**: Data flows RealCoach → Mailchimp, never reverse
+- **RealCoach is source of truth**: Mailchimp is a subscriber, not a source
+- **Silent failures**: Errors don't interrupt user workflow
+- **Queue-based**: All syncs go through queue for reliability
+- **Exponential backoff**: Handles rate limits and transient failures
+
+### Sync Library Functions
+
+```typescript
+// Connection management
+getConnection(userId): Promise<MailchimpConnection | null>
+hasActiveConnection(userId): Promise<boolean>
+updateConnectionStatus(userId, status, error?): Promise<void>
+
+// Queue operations
+enqueueSync(userId, contactId, operation, payload?): Promise<void>
+processUserQueue(userId): Promise<{processed, succeeded, failed}>
+queueAllContacts(userId): Promise<number>
+
+// Mailchimp API
+syncContact(connection, contact): Promise<SyncResult>
+syncTags(connection, email, tags): Promise<SyncResult>
+deleteContact(connection, email): Promise<SyncResult>
+```
+
+### Git Branch & PR
+
+- Branch: `feature/mailchimp-sync`
+- PR: https://github.com/jwarm69/rc1-5/pull/6
+- Commit: `190097b` - Add Mailchimp Sync v1
+
+### Verification
+
+- [x] TypeScript check passes (`npx tsc --noEmit`)
+- [x] All 178 tests pass (`npm test`)
+- [x] Build succeeds (`npm run build`)
+- [ ] Manual: OAuth flow connects successfully
+- [ ] Manual: Audience selection triggers initial sync
+- [ ] Manual: Contact create/update/delete queues sync
+- [ ] Manual: Sync errors show notification in CoachPanel
+
+---
+
+*Last updated: January 12, 2026 (Sprint 4 added)*
