@@ -36,9 +36,54 @@ export interface LLMConfig {
 // MESSAGE TYPES
 // ============================================================================
 
+/**
+ * Image source for vision API requests
+ */
+export interface ImageSource {
+  type: 'base64';
+  media_type: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
+  data: string; // base64-encoded image data (without data URL prefix)
+}
+
+/**
+ * Content block types for multimodal messages
+ */
+export type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: ImageSource };
+
+/**
+ * Message content can be a simple string or an array of content blocks
+ * for multimodal (vision) requests
+ */
+export type MessageContent = string | ContentBlock[];
+
+/**
+ * LLM message with support for multimodal content
+ */
 export interface LLMMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: MessageContent;
+}
+
+/**
+ * Helper to check if content is multimodal
+ */
+export function isMultimodalContent(content: MessageContent): content is ContentBlock[] {
+  return Array.isArray(content);
+}
+
+/**
+ * Helper to extract text from message content
+ */
+export function getTextContent(content: MessageContent): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  return content
+    .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
+    .map(block => block.text)
+    .join('\n');
 }
 
 export interface CoachingContext {
@@ -128,4 +173,42 @@ export interface LLMAdapter {
   generate(request: LLMRequest): Promise<LLMResponse>;
   generateStream?(request: LLMRequest): AsyncGenerator<string, void, unknown>;
   validateConfig(): boolean;
+}
+
+// ============================================================================
+// VISION TYPES
+// ============================================================================
+
+/**
+ * Request for screenshot interpretation
+ */
+export interface VisionRequest {
+  /** Base64-encoded images (without data URL prefix) */
+  images: Array<{
+    base64: string;
+    mediaType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
+  }>;
+  /** User's stated intent for what they want done with the screenshot */
+  userIntent?: string;
+  /** Additional context about the user's business */
+  context?: {
+    userName?: string;
+    industry?: string;
+  };
+}
+
+/**
+ * Raw response from vision API before parsing
+ */
+export interface VisionResponse {
+  /** Raw analysis text from the LLM */
+  rawAnalysis: string;
+  /** Model used */
+  model?: string;
+  /** Token usage */
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
 }

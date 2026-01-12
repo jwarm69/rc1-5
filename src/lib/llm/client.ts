@@ -18,10 +18,14 @@ import {
   CoachingResponse,
   LLMError,
   TaskType,
+  ContentBlock,
+  VisionRequest,
+  VisionResponse,
 } from './types';
-import { buildSystemPrompt, buildDailyActionPrompt } from './prompts';
+import { buildSystemPrompt, buildDailyActionPrompt, buildScreenshotInterpretationPrompt } from './prompts';
 import { CoachMode, CoachingMove } from '@/types/coaching';
 import { supabase } from '@/integrations/supabase/client';
+import { ScreenshotInterpretation, ContentType } from '@/types/screenshot';
 
 // ============================================================================
 // PROXY CONFIGURATION
@@ -349,18 +353,238 @@ export class LLMClient {
   }
 
   /**
-   * Analyze a screenshot - currently requires direct API access
-   * TODO: Add vision support to proxy
+   * Interpret screenshot(s) using Claude Vision API
+   * Returns a structured interpretation with detected content, people, dates, and patterns
+   */
+  async interpretScreenshot(
+    request: VisionRequest
+  ): Promise<ScreenshotInterpretation> {
+    const { images, userIntent, context } = request;
+
+    if (images.length === 0) {
+      throw new LLMError('No images provided', 'INVALID_CONFIG');
+    }
+
+    // Build the system prompt for screenshot interpretation
+    const systemPrompt = buildScreenshotInterpretationPrompt(userIntent, context);
+
+    // Build content blocks with images and text
+    const contentBlocks: ContentBlock[] = [];
+
+    // Add all images
+    for (const img of images) {
+      contentBlocks.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: img.mediaType,
+          data: img.base64,
+        },
+      });
+    }
+
+    // Add the analysis request text
+    contentBlocks.push({
+      type: 'text',
+      text: userIntent
+        ? `The user says: "${userIntent}"\n\nAnalyze the screenshot(s) above and provide your interpretation.`
+        : 'Analyze the screenshot(s) above and provide your interpretation.',
+    });
+
+    // Build messages for the API
+    const messages: LLMMessage[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: contentBlocks },
+    ];
+
+    try {
+      // Call the proxy with VISION task type
+      const response = await callProxy(messages, 'VISION', { maxTokens: 2048 });
+      const data = await response.json();
+      const rawAnalysis = data.content || '';
+
+      // Parse the structured response from the LLM
+      return this.parseInterpretationResponse(rawAnalysis, images.length);
+    } catch (error) {
+      if (error instanceof LLMError) {
+        throw error;
+      }
+      throw new LLMError(
+        error instanceof Error ? error.message : 'Vision analysis failed',
+        'API_ERROR'
+      );
+    }
+  }
+
+  /**
+   * Parse the LLM's raw analysis into a structured ScreenshotInterpretation
+   */
+  private parseInterpretationResponse(
+    rawAnalysis: string,
+    imageCount: number
+  ): ScreenshotInterpretation {
+    // Default values
+    let contentType: ContentType = 'unknown';
+    const summary: string[] = [];
+    const peopleDetected: string[] = [];
+    const datesDetected: string[] = [];
+    const patterns: { type: string; description: string; severity: 'low' | 'medium' | 'high' }[] = [];
+    let inferredIntent: string | undefined;
+    let confidence = 0.7;
+
+    try {
+      // Try to parse as JSON first (if LLM returned structured response)
+      const jsonMatch = rawAnalysis.match(/```json\n?([\s\S]*?)```/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[1]);
+        return {
+          id: `int_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          contentType: parsed.contentType || 'unknown',
+          summary: parsed.summary || [],
+          peopleDetected: parsed.peopleDetected || parsed.people || [],
+          datesDetected: parsed.datesDetected || parsed.dates || [],
+          patterns: parsed.patterns || [],
+          inferredIntent: parsed.inferredIntent || parsed.intent,
+          confidence: parsed.confidence || 0.7,
+          rawAnalysis,
+        };
+      }
+
+      // Parse unstructured response
+      const lines = rawAnalysis.split('\n').filter(l => l.trim());
+
+      // Extract content type
+      const contentTypePatterns: { pattern: RegExp; type: ContentType }[] = [
+        { pattern: /text (message|conversation)/i, type: 'text_conversation' },
+        { pattern: /(whatsapp|instagram|facebook|dm|direct message)/i, type: 'social_dm' },
+        { pattern: /email/i, type: 'email_thread' },
+        { pattern: /calendar.*day/i, type: 'calendar_day' },
+        { pattern: /calendar.*week/i, type: 'calendar_week' },
+        { pattern: /notes?/i, type: 'notes' },
+        { pattern: /(crm|contact.*list)/i, type: 'crm_list' },
+        { pattern: /open house|sign.?in/i, type: 'open_house_signin' },
+        { pattern: /spreadsheet|excel|sheet/i, type: 'spreadsheet' },
+      ];
+
+      for (const { pattern, type } of contentTypePatterns) {
+        if (pattern.test(rawAnalysis)) {
+          contentType = type;
+          break;
+        }
+      }
+
+      // Extract bullet points for summary
+      const bulletRegex = /^[\s]*[-•*]\s*(.+)$/gm;
+      let match;
+      while ((match = bulletRegex.exec(rawAnalysis)) !== null && summary.length < 5) {
+        summary.push(match[1].trim());
+      }
+
+      // If no bullets found, take first few sentences
+      if (summary.length === 0) {
+        const sentences = rawAnalysis.split(/[.!?]+/).filter(s => s.trim().length > 10);
+        summary.push(...sentences.slice(0, 3).map(s => s.trim()));
+      }
+
+      // Extract names (capitalized words that look like names)
+      const nameRegex = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/g;
+      const excludedWords = new Set(['The', 'This', 'That', 'Here', 'There', 'What', 'When', 'Where', 'How', 'Why', 'I']);
+      while ((match = nameRegex.exec(rawAnalysis)) !== null) {
+        const name = match[1];
+        if (!excludedWords.has(name) && !peopleDetected.includes(name)) {
+          peopleDetected.push(name);
+        }
+      }
+
+      // Extract dates
+      const datePatterns = [
+        /\b(\d{1,2}\/\d{1,2}\/\d{2,4})\b/g,
+        /\b(\d{4}-\d{2}-\d{2})\b/g,
+        /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:,?\s+\d{4})?\b/gi,
+        /\b(yesterday|today|tomorrow)\b/gi,
+        /\b(\d{1,2}:\d{2}\s*(?:AM|PM)?)\b/gi,
+      ];
+
+      for (const pattern of datePatterns) {
+        while ((match = pattern.exec(rawAnalysis)) !== null) {
+          if (!datesDetected.includes(match[1])) {
+            datesDetected.push(match[1]);
+          }
+        }
+      }
+
+      // Detect patterns
+      if (/gap|haven't responded|no reply|waiting/i.test(rawAnalysis)) {
+        patterns.push({
+          type: 'response_gap',
+          description: 'Gap in conversation detected',
+          severity: 'medium',
+        });
+      }
+      if (/overload|busy|packed|full/i.test(rawAnalysis)) {
+        patterns.push({
+          type: 'calendar_overload',
+          description: 'Schedule appears overloaded',
+          severity: 'medium',
+        });
+      }
+      if (/urgent|asap|immediately/i.test(rawAnalysis)) {
+        patterns.push({
+          type: 'urgency_signal',
+          description: 'Urgency detected',
+          severity: 'high',
+        });
+      }
+
+      // Extract inferred intent
+      const intentMatch = rawAnalysis.match(/(?:intent|want|looking for|help with)[:\s]+([^.!?]+)/i);
+      if (intentMatch) {
+        inferredIntent = intentMatch[1].trim();
+      }
+
+    } catch (error) {
+      console.error('Error parsing interpretation response:', error);
+    }
+
+    return {
+      id: `int_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      contentType,
+      summary: summary.length > 0 ? summary : ['Unable to extract summary from screenshot'],
+      peopleDetected,
+      datesDetected,
+      patterns,
+      inferredIntent,
+      confidence,
+      rawAnalysis,
+    };
+  }
+
+  /**
+   * Legacy method for backward compatibility
+   * @deprecated Use interpretScreenshot instead
    */
   async analyzeScreenshot(
     imageBase64: string,
     contextPrompt?: string
   ): Promise<{ description: string; suggestedAction?: string; insights: string[] }> {
-    console.warn('[LLM Client] Vision analysis not yet supported through proxy');
-    return {
-      description: 'Screenshot analysis is temporarily unavailable.',
-      insights: [],
-    };
+    try {
+      const interpretation = await this.interpretScreenshot({
+        images: [{ base64: imageBase64, mediaType: 'image/png' }],
+        userIntent: contextPrompt,
+      });
+
+      return {
+        description: interpretation.summary.join(' '),
+        suggestedAction: interpretation.inferredIntent,
+        insights: interpretation.patterns.map(p => p.description),
+      };
+    } catch (error) {
+      console.error('[LLM Client] Vision analysis failed:', error);
+      return {
+        description: 'Screenshot analysis failed.',
+        insights: [],
+      };
+    }
   }
 
   /**

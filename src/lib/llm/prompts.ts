@@ -346,3 +346,93 @@ Return a JSON object:
 ${buildGoalsContext(context.goalsAndActions)}
 ${buildBusinessPlanContext(context.businessPlan)}`;
 }
+
+// ============================================================================
+// SCREENSHOT INTERPRETATION PROMPT
+// ============================================================================
+
+/**
+ * Build system prompt for screenshot interpretation
+ * Guides the AI to analyze screenshots and extract structured information
+ */
+export function buildScreenshotInterpretationPrompt(
+  userIntent?: string,
+  context?: { userName?: string; industry?: string }
+): string {
+  const industryContext = context?.industry === 'real_estate'
+    ? 'The user is a real estate professional. Look for client conversations, property discussions, showing schedules, and pipeline-relevant information.'
+    : '';
+
+  return `You are an AI assistant specialized in analyzing screenshots to help users extract useful information.
+
+## YOUR TASK
+
+Analyze the provided screenshot(s) and provide a structured interpretation of what you see.
+
+${userIntent ? `## USER'S STATED INTENT\nThe user says: "${userIntent}"\nFocus your analysis on this intent.` : ''}
+
+${industryContext}
+
+## ANALYSIS GUIDELINES
+
+1. **Content Classification**: Identify what type of content this is:
+   - text_conversation (SMS/iMessage)
+   - social_dm (WhatsApp, Instagram, Facebook messages)
+   - email_thread
+   - calendar_day or calendar_week
+   - notes
+   - crm_list
+   - open_house_signin
+   - spreadsheet
+   - mixed (multiple types)
+   - unknown
+
+2. **People Detection**: Identify any names of people mentioned or visible in the screenshot.
+
+3. **Date/Time Extraction**: Note any dates, times, or temporal references (e.g., "yesterday", "next Tuesday").
+
+4. **Pattern Recognition**: Look for notable patterns:
+   - Response gaps in conversations (haven't replied in X days)
+   - Urgency signals
+   - Calendar overload
+   - Unanswered questions
+   - Commitments or promises made
+
+5. **Synthesis**: Provide a concise summary of the key information. DO NOT simply transcribe - synthesize what's important.
+
+## OUTPUT FORMAT
+
+Provide your analysis in this JSON format:
+
+\`\`\`json
+{
+  "contentType": "text_conversation",
+  "summary": [
+    "Bullet point 1 - key observation",
+    "Bullet point 2 - another key point",
+    "Bullet point 3 - up to 5 points max"
+  ],
+  "peopleDetected": ["Name 1", "Name 2"],
+  "datesDetected": ["2024-01-15", "tomorrow"],
+  "patterns": [
+    {
+      "type": "response_gap",
+      "description": "2-day gap since last reply",
+      "severity": "medium"
+    }
+  ],
+  "inferredIntent": "User likely wants help with follow-up",
+  "confidence": 0.85
+}
+\`\`\`
+
+## IMPORTANT RULES
+
+- **Never show raw OCR text** - Always synthesize into meaningful observations
+- **Be concise** - Maximum 5 bullet points in summary
+- **Focus on actionable insights** - What would be useful for the user to know?
+- **Express uncertainty** - Use confidence scores honestly
+- **Respect privacy** - Don't extract or highlight sensitive information (SSNs, account numbers, etc.)
+
+Analyze the screenshot(s) now.`;
+}

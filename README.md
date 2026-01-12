@@ -5,6 +5,7 @@ AI-powered coaching platform for solo real estate agents. Provides calm, clear, 
 ## Features
 
 - **AI Coaching Engine** - Intelligent coaching with mode-based conversations (Clarify, Reflect, Reframe, Commit, Direct)
+- **Screenshot Interpretation** - Upload screenshots for Vision AI analysis with "Here's What I See" confirmation flow
 - **User Calibration** - 7-question onboarding to understand goals, constraints, and preferences
 - **Daily Actions** - Max 1 primary + 2 supporting actions per day (no overwhelm)
 - **Goals & Actions (G&A)** - Annual goals, monthly milestones, friction boundaries
@@ -127,7 +128,8 @@ CLARIFY → REFLECT → REFRAME → COMMIT → DIRECT
 1. **Calibration System** - 7 G&A questions, Fast Lane protocol for impatient users
 2. **Coaching Engine** - Mode transitions, coaching moves (Focus, Agency, Identity, Ease)
 3. **Daily Action Engine** - Max 1 primary + 2 supporting, no backlogs
-4. **LLM Integration** - Provider-agnostic, enforces coaching rules
+4. **Screenshot Interpretation** - Vision AI analysis with confirmation before signal generation
+5. **LLM Integration** - Provider-agnostic, enforces coaching rules
 
 ## Non-Negotiable Behavior Rules
 

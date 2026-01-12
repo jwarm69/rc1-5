@@ -14,9 +14,22 @@ import { createClient } from '@supabase/supabase-js';
 type TaskType = 'COACHING' | 'ACKNOWLEDGMENT' | 'ACTION_GEN' | 'VISION' | 'CALIBRATION';
 type LLMProvider = 'claude' | 'openai';
 
+// Content block types for multimodal messages
+interface ImageSource {
+  type: 'base64';
+  media_type: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
+  data: string;
+}
+
+type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: ImageSource };
+
+type MessageContent = string | ContentBlock[];
+
 interface LLMMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: MessageContent;
 }
 
 interface LLMRequest {
@@ -27,6 +40,30 @@ interface LLMRequest {
     temperature?: number;
     maxTokens?: number;
   };
+}
+
+// Helper to check if content is multimodal
+function isMultimodalContent(content: MessageContent): content is ContentBlock[] {
+  return Array.isArray(content);
+}
+
+// Helper to extract text from content
+function getTextContent(content: MessageContent): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  return content
+    .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
+    .map(block => block.text)
+    .join('\n');
+}
+
+// Helper to check if request contains images
+function hasImages(messages: LLMMessage[]): boolean {
+  return messages.some(m => {
+    if (!isMultimodalContent(m.content)) return false;
+    return m.content.some(block => block.type === 'image');
+  });
 }
 
 interface ModelRoute {
@@ -149,14 +186,29 @@ async function callClaude(
     throw new Error('ANTHROPIC_API_KEY not configured');
   }
 
-  const systemMessage = messages.find(m => m.role === 'system')?.content || '';
+  // Extract system message (always string)
+  const systemMsg = messages.find(m => m.role === 'system');
+  const systemMessage = systemMsg ? getTextContent(systemMsg.content) : '';
+
+  // Format conversation messages - handle both string and multimodal content
   const conversationMessages = messages
     .filter(m => m.role !== 'system')
-    .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+    .map(m => {
+      // If content is already a string, keep it simple
+      if (typeof m.content === 'string') {
+        return { role: m.role as 'user' | 'assistant', content: m.content };
+      }
+      // If content is an array (multimodal), pass it through for Claude
+      return { role: m.role as 'user' | 'assistant', content: m.content };
+    });
+
+  // Use higher max_tokens for vision requests (they tend to be more complex)
+  const isVisionRequest = hasImages(messages);
+  const maxTokens = options?.maxTokens || (isVisionRequest ? 2048 : 1024);
 
   const body = {
     model,
-    max_tokens: options?.maxTokens || 1024,
+    max_tokens: maxTokens,
     system: systemMessage,
     messages: conversationMessages,
     temperature: options?.temperature ?? 0.7,
@@ -192,9 +244,20 @@ async function callOpenAI(
     throw new Error('OPENAI_API_KEY not configured');
   }
 
+  // OpenAI doesn't support our image format - reject image requests
+  if (hasImages(messages)) {
+    throw new Error('Vision requests require Claude provider');
+  }
+
+  // Convert messages to OpenAI format (always string content)
+  const openaiMessages = messages.map(m => ({
+    role: m.role,
+    content: typeof m.content === 'string' ? m.content : getTextContent(m.content),
+  }));
+
   const body = {
     model,
-    messages: messages.map(m => ({ role: m.role, content: m.content })),
+    messages: openaiMessages,
     max_tokens: options?.maxTokens || 1024,
     temperature: options?.temperature ?? 0.7,
     stream: !!stream,

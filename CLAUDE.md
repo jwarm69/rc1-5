@@ -25,6 +25,7 @@ This file provides guidance to Claude Code when working with this repository.
 ├── components/          # React components
 │   ├── layout/          # MainLayout, Sidebar, CoachPanel
 │   ├── ui/              # shadcn-ui components (40+)
+│   ├── chat/            # InterpretationCard, UploadPreview, ClarificationPrompt
 │   ├── database/        # Contact/opportunity modals
 │   ├── goals/           # GoalCard components
 │   └── actions/         # ActionCard components
@@ -32,24 +33,28 @@ This file provides guidance to Claude Code when working with this repository.
 │   ├── CalibrationContext.tsx    # User calibration state
 │   ├── CoachingEngineContext.tsx # Coaching behavior state
 │   ├── DatabaseContext.tsx       # Supabase realtime subscriptions
+│   ├── UploadContext.tsx         # Screenshot upload state machine
 │   ├── AuthContext.tsx           # Supabase auth
 │   └── ThemeContext.tsx          # Dark/light mode
 ├── lib/                 # Core business logic
 │   ├── calibration.ts            # Calibration state machine
 │   ├── coaching-engine.ts        # Coaching mode/move logic
 │   ├── daily-action-engine.ts    # Action selection
+│   ├── screenshot-interpreter.ts # Vision AI interpretation pipeline
+│   ├── signal-handler.ts         # Screenshot signal processing
 │   ├── env.ts                    # Environment validation
 │   └── llm/                      # LLM integration
-│       ├── client.ts             # Calls server proxy
+│       ├── client.ts             # Calls server proxy + Vision API
 │       ├── claude-adapter.ts     # Anthropic API
 │       ├── openai-adapter.ts     # OpenAI API
-│       ├── prompts.ts            # System prompts
-│       └── types.ts              # LLM types
+│       ├── prompts.ts            # System prompts + vision prompts
+│       └── types.ts              # LLM types + multimodal content
 ├── hooks/               # Custom React hooks
 │   └── useSupabaseCalibration.ts # Calibration persistence
 ├── pages/               # Route pages (10 total)
 ├── types/               # TypeScript types
-│   └── coaching.ts      # Core coaching types (534 lines)
+│   ├── coaching.ts      # Core coaching types (534 lines)
+│   └── screenshot.ts    # Upload states, signals, content types
 ├── test/                # Test setup
 │   └── setup.ts         # Supabase mocks
 └── integrations/        # External service integrations
@@ -112,7 +117,14 @@ UNINITIALIZED → CALIBRATING → G&A_DRAFTED → G&A_CONFIRMED → ACTIONS_ACTI
    - JWT authentication + rate limiting (20 req/min)
    - No API keys in client code
 
-5. **Data Persistence** (Supabase)
+5. **Screenshot Interpretation** (`src/lib/screenshot-interpreter.ts`)
+   - Vision AI via Claude for image analysis
+   - Content classification (conversations, calendars, social DMs)
+   - Pattern detection (response gaps, urgency, overload)
+   - Signal generation for Daily Action Engine
+   - **Confirmation required** before signals generated
+
+6. **Data Persistence** (Supabase)
    - 10 tables with Row Level Security
    - Realtime subscriptions for contacts/opportunities
    - Chat messages persist with `coaching_mode`
@@ -127,6 +139,8 @@ UNINITIALIZED → CALIBRATING → G&A_DRAFTED → G&A_CONFIRMED → ACTIONS_ACTI
 | `src/types/coaching.ts` | Core type definitions (534 lines) |
 | `src/lib/calibration.ts` | Calibration state machine |
 | `api/llm/route.ts` | Server-side LLM proxy (security) |
+| `src/lib/screenshot-interpreter.ts` | Vision AI interpretation pipeline |
+| `src/contexts/UploadContext.tsx` | Screenshot upload state machine |
 | `docs/behavior/*.md` | AI behavior specifications |
 
 ## Non-Negotiable Behavior Rules

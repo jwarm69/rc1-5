@@ -222,4 +222,111 @@ The following docs were updated to reflect completed work:
 
 ---
 
-*Last updated: January 11, 2026 (Sprint 2 added)*
+---
+
+## Sprint 3: Screenshots Interpretation v1 (January 12, 2026)
+
+### Overview
+Implemented screenshot upload + Claude Vision AI interpretation in CoachPanel with mandatory confirmation flow before signal generation. Users can upload screenshots of conversations, calendars, or any content, and the AI interprets them to suggest follow-up actions.
+
+### Key Features
+
+1. **Screenshot Upload Flow**
+   - Drag-and-drop or click-to-upload (up to 10 images)
+   - Thumbnail grid preview with removal capability
+   - Processing state indicators
+
+2. **Vision AI Interpretation**
+   - Claude Vision API analyzes uploaded images
+   - Content classification (text conversations, social DMs, calendars, emails, etc.)
+   - People/contact detection with fuzzy matching
+   - Date extraction and normalization
+   - Pattern detection (response gaps, urgency signals, calendar overload)
+
+3. **"Here's What I See" Card**
+   - Displays AI interpretation summary (max 5 bullet points)
+   - Shows detected people, dates, and patterns
+   - Inferred intent with confidence indicator
+   - Three-button confirmation: Yes / Adjust / No
+
+4. **Signal Generation**
+   - Only generates signals AFTER user confirms
+   - Signals inform Daily Action Engine (NO direct DB writes)
+   - Signal types: follow_up, contact_note, scheduling, pipeline, coaching
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `src/types/screenshot.ts` | Upload states, content types, signal types |
+| `src/contexts/UploadContext.tsx` | State machine with useReducer pattern |
+| `src/lib/screenshot-interpreter.ts` | Classification, extraction, signal generation |
+| `src/lib/signal-handler.ts` | Signal processing for Daily Action Engine |
+| `src/components/chat/InterpretationCard.tsx` | "Here's What I See" card |
+| `src/components/chat/UploadPreview.tsx` | Thumbnail grid with remove buttons |
+| `src/components/chat/ClarificationPrompt.tsx` | Intent clarification when needed |
+| `src/components/chat/index.ts` | Barrel export file |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `api/llm/route.ts` | Added multimodal content handling for Vision API |
+| `src/lib/llm/types.ts` | Added ContentBlock type for image+text arrays |
+| `src/lib/llm/client.ts` | Added `interpretScreenshot()` method |
+| `src/lib/llm/prompts.ts` | Added `buildScreenshotInterpretationPrompt()` |
+| `src/components/layout/CoachPanel.tsx` | Wired interpretation flow (+350 lines) |
+| `src/App.tsx` | Added UploadProvider to provider tree |
+
+### Non-Negotiables Verified
+
+- [x] Confirmation MANDATORY before signal generation
+- [x] Signals inform Daily Action Engine only (NO direct DB writes)
+- [x] 10 images max per upload enforced
+- [x] Screenshots processed but not persisted to storage
+
+### Upload State Machine
+
+```
+UPLOAD_IDLE
+    ↓ (add images)
+UPLOAD_RECEIVED
+    ↓ (start interpretation)
+UPLOAD_INTERPRETING
+    ↓ (needs more context?)
+UPLOAD_NEEDS_CLARIFICATION ←→ (user provides intent)
+    ↓ (interpretation ready)
+UPLOAD_AWAITING_CONFIRMATION
+    ↓ (user confirms)
+UPLOAD_CONFIRMED → signals generated
+    ↓ (user rejects)
+UPLOAD_IDLE (reset, no signals)
+```
+
+### Signal Types
+
+| Signal Type | Description |
+|-------------|-------------|
+| `follow_up` | Detected conversation needing response |
+| `contact_note` | Information to add to a contact |
+| `scheduling` | Calendar/meeting related |
+| `pipeline` | Sales pipeline opportunity |
+| `coaching` | Coaching insight for behavior engine |
+
+### Git Branch & PR
+
+- Branch: `feature/screenshots-interpretation`
+- PR: https://github.com/jwarm69/rc1-5/pull/5
+- Commit: `2aba274` - Add Screenshots Interpretation v1
+
+### Verification
+
+- [x] TypeScript check passes (`npx tsc --noEmit`)
+- [x] All 178 tests pass (`npm test`)
+- [x] Build succeeds (`npm run build`)
+- [ ] Manual test: Upload → Interpret → Confirm → Signals logged
+- [ ] Manual test: Upload → Interpret → Reject → No signals
+
+---
+
+*Last updated: January 12, 2026 (Sprint 3 added)*

@@ -5,11 +5,22 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCalibration } from "@/contexts/CalibrationContext";
 import { useCoachingEngine } from "@/contexts/CoachingEngineContext";
+import { useUpload } from "@/contexts/UploadContext";
 import { getLLMClient, LLMError } from "@/lib/llm";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { useChatMessages } from "@/hooks/useChatMessages";
 import { useScreenshotUpload } from "@/hooks/useScreenshotUpload";
+import {
+  InterpretationCard,
+  InterpretationCardLoading,
+  InterpretationCardError,
+  UploadPreview,
+  UploadPreviewProcessing,
+  ClarificationPrompt,
+} from "@/components/chat";
+import { runInterpretationPipeline } from "@/lib/screenshot-interpreter";
+import { processSignals, formatForCoachingEngine } from "@/lib/signal-handler";
 import {
   ActionType,
   ScreenshotActionType,
@@ -92,6 +103,7 @@ export function CoachPanel({ isMobile = false }: CoachPanelProps) {
   const { user } = useAuth();
   const calibration = useCalibration();
   const engine = useCoachingEngine();
+  const upload = useUpload();
 
   // Chat messages hook - handles loading, saving, and state management
   const {
@@ -119,8 +131,8 @@ export function CoachPanel({ isMobile = false }: CoachPanelProps) {
   const [screenshotStep, setScreenshotStep] = useState(0);
   const [screenshotFlowData, setScreenshotFlowData] = useState<FlowData>({});
 
-  // Screenshot flow initialization callback
-  const handleImageProcessed = useCallback((imageUrl: string) => {
+  // Screenshot flow initialization callback - NEW AI interpretation flow
+  const handleImageProcessed = useCallback(async (imageUrl: string) => {
     setActiveAction("screenshot-context");
     setScreenshotAction(null);
     setScreenshotStep(0);
@@ -135,16 +147,64 @@ export function CoachPanel({ isMobile = false }: CoachPanelProps) {
     };
     setMessages(prev => [...prev, userMessage]);
 
-    // Coach asks what to do with the screenshot
-    setTimeout(() => {
-      const coachMessage: ChatMessage = {
+    // Extract base64 from data URL for Vision API
+    const base64Match = imageUrl.match(/^data:image\/(png|jpeg|gif|webp);base64,(.+)$/);
+    if (!base64Match) {
+      // Fallback to old flow if we can't extract base64
+      setTimeout(() => {
+        const coachMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: "coach",
+          content: "Got it! What would you like me to do with this screenshot?",
+        };
+        setMessages(prev => [...prev, coachMessage]);
+      }, 500);
+      return;
+    }
+
+    const mediaType = `image/${base64Match[1]}` as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
+    const base64Data = base64Match[2];
+
+    // Start AI interpretation flow
+    upload.startInterpretation();
+    setIsAnalyzing(true);
+
+    try {
+      // Call Vision API for interpretation
+      const client = getLLMClient();
+      const interpretation = await client.interpretScreenshot({
+        images: [{ base64: base64Data, mediaType }],
+        context: { userName: user?.email?.split('@')[0], industry: 'real_estate' },
+      });
+
+      // Store interpretation in upload context
+      upload.setInterpretation(interpretation);
+      setIsAnalyzing(false);
+
+      // Show "Here's what I see" message
+      const interpretationMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "coach",
-        content: "Got it! What would you like me to do with this screenshot?",
+        content: "I've analyzed your screenshot. Here's what I see:",
       };
-      setMessages(prev => [...prev, coachMessage]);
-    }, 500);
-  }, []);
+      setMessages(prev => [...prev, interpretationMsg]);
+
+    } catch (error) {
+      console.error('Screenshot interpretation error:', error);
+      setIsAnalyzing(false);
+      upload.setError(error instanceof Error ? error.message : 'Failed to analyze screenshot');
+
+      // Fallback to manual action selection
+      setTimeout(() => {
+        const coachMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: "coach",
+          content: "I couldn't fully analyze that screenshot. What would you like me to do with it?",
+        };
+        setMessages(prev => [...prev, coachMessage]);
+      }, 500);
+    }
+  }, [user, upload]);
 
   // Screenshot upload hook
   const {
@@ -386,6 +446,194 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
       clearMessages();
     }
   };
+
+  // Interpretation flow handlers - NEW
+  const handleInterpretationConfirm = useCallback(async () => {
+    if (!upload.state.interpretation) return;
+
+    upload.confirmInterpretation();
+
+    // Add confirmation message
+    const confirmMsg: ChatMessage = {
+      id: Date.now().toString(),
+      role: "user",
+      content: "Yes, that looks right",
+    };
+    setMessages(prev => [...prev, confirmMsg]);
+
+    // Generate signals from interpretation
+    const { signals } = await runInterpretationPipeline(
+      upload.state.interpretation.rawAnalysis || '',
+      {
+        contentType: upload.state.interpretation.contentType,
+        summary: upload.state.interpretation.summary,
+        peopleDetected: upload.state.interpretation.peopleDetected,
+        datesDetected: upload.state.interpretation.datesDetected,
+        patterns: upload.state.interpretation.patterns,
+        inferredIntent: upload.state.interpretation.inferredIntent,
+        confidence: upload.state.interpretation.confidence,
+      }
+    );
+
+    // Store signals in context (they'll be handed to Daily Action Engine)
+    upload.setSignals(signals);
+
+    // Process signals for Daily Action Engine and Coaching Engine
+    const signalResult = processSignals(signals);
+    const coachingContext = formatForCoachingEngine(signalResult);
+
+    // Log for debugging (signals are NOT written to DB directly)
+    console.log('[Screenshot] Signals processed:', {
+      count: signals.length,
+      requiresActionRegeneration: signalResult.requiresActionRegeneration,
+      prioritizedContacts: signalResult.prioritizedContacts,
+      coachingNotes: coachingContext.coachingNotes,
+    });
+
+    // Build informative response about what was captured
+    let signalSummary = '';
+    if (signals.length === 0) {
+      signalSummary = "I've noted the key details from this screenshot.";
+    } else {
+      const parts: string[] = [];
+
+      // Mention follow-ups
+      const followUps = signals.filter(s => s.type === 'follow_up');
+      if (followUps.length > 0) {
+        const firstContact = followUps[0].metadata.participants?.[0];
+        parts.push(firstContact
+          ? `a follow-up reminder for ${firstContact}`
+          : 'a follow-up reminder');
+      }
+
+      // Mention notes
+      const notes = signals.filter(s => s.type === 'contact_note');
+      if (notes.length > 0) {
+        parts.push(`${notes.length} contact note${notes.length > 1 ? 's' : ''}`);
+      }
+
+      // Mention scheduling
+      const scheduling = signals.filter(s => s.type === 'scheduling');
+      if (scheduling.length > 0) {
+        parts.push('a scheduling insight');
+      }
+
+      if (parts.length > 0) {
+        signalSummary = `I've captured ${parts.join(', ')}. ${signalResult.requiresActionRegeneration ? "This will inform your next daily action." : ""}`;
+      } else {
+        signalSummary = `I've captured ${signals.length} item${signals.length > 1 ? 's' : ''} from this screenshot.`;
+      }
+    }
+
+    setTimeout(() => {
+      const coachResponse: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "coach",
+        content: signalSummary,
+      };
+      setMessages(prev => [...prev, coachResponse]);
+
+      // Reset screenshot states after a delay
+      setTimeout(() => {
+        setActiveAction(null);
+        setUploadedImage(null);
+        upload.reset();
+      }, 2000);
+    }, 500);
+  }, [upload]);
+
+  const handleInterpretationAdjust = useCallback(() => {
+    // Request clarification
+    upload.requestClarification();
+
+    const adjustMsg: ChatMessage = {
+      id: Date.now().toString(),
+      role: "coach",
+      content: "What did I miss or get wrong? Tell me more about what you'd like me to focus on.",
+    };
+    setMessages(prev => [...prev, adjustMsg]);
+  }, [upload]);
+
+  const handleInterpretationReject = useCallback(() => {
+    // Add rejection message
+    const rejectMsg: ChatMessage = {
+      id: Date.now().toString(),
+      role: "user",
+      content: "No, that's not right",
+    };
+    setMessages(prev => [...prev, rejectMsg]);
+
+    // Clear interpretation and offer manual flow
+    upload.reset();
+
+    setTimeout(() => {
+      const coachMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "coach",
+        content: "Got it. What would you like me to do with this screenshot instead?",
+      };
+      setMessages(prev => [...prev, coachMsg]);
+    }, 500);
+  }, [upload]);
+
+  const handleClarificationSubmit = useCallback(async (intent: string) => {
+    // User provided clarification
+    const userMsg: ChatMessage = {
+      id: Date.now().toString(),
+      role: "user",
+      content: intent,
+    };
+    setMessages(prev => [...prev, userMsg]);
+
+    upload.setUserIntent(intent);
+    upload.startInterpretation();
+    setIsAnalyzing(true);
+
+    try {
+      // Re-run interpretation with user intent
+      const client = getLLMClient();
+      const base64Match = uploadedImage?.match(/^data:image\/(png|jpeg|gif|webp);base64,(.+)$/);
+
+      if (base64Match) {
+        const mediaType = `image/${base64Match[1]}` as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
+        const base64Data = base64Match[2];
+
+        const interpretation = await client.interpretScreenshot({
+          images: [{ base64: base64Data, mediaType }],
+          userIntent: intent,
+          context: { userName: user?.email?.split('@')[0], industry: 'real_estate' },
+        });
+
+        upload.setInterpretation(interpretation);
+        setIsAnalyzing(false);
+
+        const interpretationMsg: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: "coach",
+          content: "Thanks for clarifying. Here's what I see now:",
+        };
+        setMessages(prev => [...prev, interpretationMsg]);
+      }
+    } catch (error) {
+      console.error('Re-interpretation error:', error);
+      setIsAnalyzing(false);
+      upload.setError(error instanceof Error ? error.message : 'Failed to re-analyze screenshot');
+    }
+  }, [upload, uploadedImage, user]);
+
+  const handleClarificationSkip = useCallback(() => {
+    // Skip clarification, fall back to manual action selection
+    upload.reset();
+
+    setTimeout(() => {
+      const coachMsg: ChatMessage = {
+        id: Date.now().toString(),
+        role: "coach",
+        content: "No problem. What would you like me to do with this screenshot?",
+      };
+      setMessages(prev => [...prev, coachMsg]);
+    }, 300);
+  }, [upload]);
 
   const handleScreenshotActionSelect = (actionId: ScreenshotActionType) => {
     setScreenshotAction(actionId);
@@ -1216,8 +1464,46 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
             </div>
           )}
 
-          {/* Screenshot action selection buttons */}
-          {activeAction === "screenshot-context" && !screenshotAction && !isSubmitting && (
+          {/* AI Interpretation Card - shows when we have an interpretation */}
+          {upload.hasInterpretation && upload.state.interpretation && !isSubmitting && (
+            <div className="animate-fade-in">
+              <InterpretationCard
+                interpretation={upload.state.interpretation}
+                onConfirm={handleInterpretationConfirm}
+                onAdjust={handleInterpretationAdjust}
+                onReject={handleInterpretationReject}
+                isLoading={isSubmitting}
+              />
+            </div>
+          )}
+
+          {/* Clarification prompt - shows when AI needs more context */}
+          {upload.state.uploadState === 'UPLOAD_NEEDS_CLARIFICATION' && !isSubmitting && (
+            <div className="animate-fade-in">
+              <ClarificationPrompt
+                onSubmit={handleClarificationSubmit}
+                onSkip={handleClarificationSkip}
+                isLoading={isAnalyzing}
+              />
+            </div>
+          )}
+
+          {/* Interpretation error state */}
+          {upload.state.uploadState === 'UPLOAD_FAILED' && upload.state.error && (
+            <div className="animate-fade-in">
+              <InterpretationCardError
+                error={upload.state.error}
+                onRetry={() => {
+                  upload.reset();
+                  if (uploadedImage) handleImageProcessed(uploadedImage);
+                }}
+                onDismiss={() => upload.reset()}
+              />
+            </div>
+          )}
+
+          {/* Screenshot action selection buttons - fallback when interpretation not available */}
+          {activeAction === "screenshot-context" && !screenshotAction && !isSubmitting && !upload.hasInterpretation && upload.state.uploadState !== 'UPLOAD_NEEDS_CLARIFICATION' && upload.state.uploadState !== 'UPLOAD_FAILED' && upload.state.uploadState !== 'UPLOAD_INTERPRETING' && (
             <div className="space-y-3 animate-fade-in">
               <div className="flex flex-wrap gap-2">
                 {screenshotActions.map((action) => {
@@ -1594,8 +1880,46 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
             </div>
           )}
 
-          {/* Screenshot action selection buttons */}
-          {activeAction === "screenshot-context" && !screenshotAction && !isSubmitting && (
+          {/* AI Interpretation Card - shows when we have an interpretation (desktop) */}
+          {upload.hasInterpretation && upload.state.interpretation && !isSubmitting && (
+            <div className="animate-fade-in">
+              <InterpretationCard
+                interpretation={upload.state.interpretation}
+                onConfirm={handleInterpretationConfirm}
+                onAdjust={handleInterpretationAdjust}
+                onReject={handleInterpretationReject}
+                isLoading={isSubmitting}
+              />
+            </div>
+          )}
+
+          {/* Clarification prompt - shows when AI needs more context (desktop) */}
+          {upload.state.uploadState === 'UPLOAD_NEEDS_CLARIFICATION' && !isSubmitting && (
+            <div className="animate-fade-in">
+              <ClarificationPrompt
+                onSubmit={handleClarificationSubmit}
+                onSkip={handleClarificationSkip}
+                isLoading={isAnalyzing}
+              />
+            </div>
+          )}
+
+          {/* Interpretation error state (desktop) */}
+          {upload.state.uploadState === 'UPLOAD_FAILED' && upload.state.error && (
+            <div className="animate-fade-in">
+              <InterpretationCardError
+                error={upload.state.error}
+                onRetry={() => {
+                  upload.reset();
+                  if (uploadedImage) handleImageProcessed(uploadedImage);
+                }}
+                onDismiss={() => upload.reset()}
+              />
+            </div>
+          )}
+
+          {/* Screenshot action selection buttons - fallback when interpretation not available (desktop) */}
+          {activeAction === "screenshot-context" && !screenshotAction && !isSubmitting && !upload.hasInterpretation && upload.state.uploadState !== 'UPLOAD_NEEDS_CLARIFICATION' && upload.state.uploadState !== 'UPLOAD_FAILED' && upload.state.uploadState !== 'UPLOAD_INTERPRETING' && (
             <div className="space-y-3 animate-fade-in">
               <div className="flex flex-wrap gap-2">
                 {screenshotActions.map((action) => {
