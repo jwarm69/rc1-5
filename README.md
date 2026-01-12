@@ -51,17 +51,28 @@ The app will be available at `http://localhost:8080` (or next available port).
 Create a `.env` file in the root directory:
 
 ```env
-# Supabase (required for production)
+# Supabase (required)
 VITE_SUPABASE_URL=https://xxx.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJ...
+```
 
-# LLM Provider (choose one)
-VITE_LLM_PROVIDER=claude|openai
-VITE_ANTHROPIC_API_KEY=sk-ant-...
-VITE_OPENAI_API_KEY=sk-...
+**Server-side variables** (set in Vercel Dashboard, NOT in `.env`):
+```env
+# LLM API Keys (server-side only - NEVER in client code)
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+
+# Mailchimp OAuth (optional)
+MAILCHIMP_CLIENT_ID=...
+MAILCHIMP_CLIENT_SECRET=...
+
+# Cron job security
+CRON_SECRET=...
 ```
 
 **Note**: The app works in development mode without API keys using mock responses.
+
+> **For complete setup instructions including all integrations, see [CLAUDE.md](./CLAUDE.md)**
 
 ## Project Structure
 
@@ -144,9 +155,14 @@ These rules are enforced at the coaching engine level:
 4. **No urgency ever rendered** - No timers, streaks, overdue labels
 5. **Banned words**: crush, hustle, grind, empower, synergy, game-changer
 
+## Testing
+
+- **Unit Tests**: `npm test` (178 tests)
+- **Manual Testing**: See [docs/MANUAL_TESTING.md](docs/MANUAL_TESTING.md) for MVP test scripts
+
 ## Contributing
 
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for internal development guidelines.
+See [CLAUDE.md](./CLAUDE.md) for complete project context and development guidelines.
 
 ## License
 

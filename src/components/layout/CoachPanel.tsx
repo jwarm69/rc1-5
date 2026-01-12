@@ -21,7 +21,7 @@ import {
   ClarificationPrompt,
 } from "@/components/chat";
 import { runInterpretationPipeline } from "@/lib/screenshot-interpreter";
-import { processSignals, formatForCoachingEngine } from "@/lib/signal-handler";
+import { processSignals, formatForCoachingEngine, createPriorityBoost } from "@/lib/signal-handler";
 import {
   ActionType,
   ScreenshotActionType,
@@ -506,6 +506,7 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
     // Process signals for Daily Action Engine and Coaching Engine
     const signalResult = processSignals(signals);
     const coachingContext = formatForCoachingEngine(signalResult);
+    const priorityBoost = createPriorityBoost(signalResult);
 
     // Log for debugging (signals are NOT written to DB directly)
     console.log('[Screenshot] Signals processed:', {
@@ -514,6 +515,27 @@ Does this look right? Say "yes" to confirm, or tell me what to change.`;
       prioritizedContacts: signalResult.prioritizedContacts,
       coachingNotes: coachingContext.coachingNotes,
     });
+
+    // Hand off to Daily Action Engine via Coaching Engine priority context
+    // This is the critical signal handoff that influences action generation
+    if (signalResult.requiresActionRegeneration && priorityBoost.suggestedPrimary) {
+      const priorityContext = {
+        type: 'ALIGNMENT' as const,
+        description: priorityBoost.suggestedPrimary.title || 'Follow up from screenshot',
+        mayOverridePrimary: true,
+      };
+      engine.recordPriorityContext(priorityContext);
+      console.log('[Screenshot] Priority context recorded for Daily Action Engine:', priorityContext);
+    } else if (coachingContext.coachingNotes.length > 0) {
+      // Even without action regeneration, record coaching context for future interactions
+      const priorityContext = {
+        type: 'ALIGNMENT' as const,
+        description: coachingContext.coachingNotes[0],
+        mayOverridePrimary: false,
+      };
+      engine.recordPriorityContext(priorityContext);
+      console.log('[Screenshot] Coaching context recorded:', priorityContext);
+    }
 
     // Build informative response about what was captured
     let signalSummary = '';

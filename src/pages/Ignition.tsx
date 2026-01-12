@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
-import { Upload, Send } from "lucide-react";
+import { Upload, Send, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Link } from "react-router-dom";
 
 type IgnitionState = "listening" | "thinking" | "preview" | "actions";
 
@@ -63,6 +64,20 @@ export default function Ignition() {
 
   return (
     <div className="h-[calc(100vh-3.5rem)] flex flex-col items-center justify-center p-8 pb-12 animate-fade-in overflow-hidden">
+      {/* Prototype Banner */}
+      <div className="fixed top-14 left-0 right-0 z-50 bg-amber-500/10 border-b border-amber-500/20 px-4 py-2">
+        <div className="max-w-2xl mx-auto flex items-center justify-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+          <Info className="h-4 w-4 flex-shrink-0" />
+          <span>
+            This is a prototype interface.{" "}
+            <Link to="/demo/goals" className="underline hover:text-amber-700 dark:hover:text-amber-300">
+              Use Goals & Actions
+            </Link>{" "}
+            for the production experience.
+          </span>
+        </div>
+      </div>
+
       {/* Coach Presence */}
       <div className="mb-12 text-center">
         <div 
