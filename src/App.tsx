@@ -10,6 +10,8 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { CalibrationProvider } from "@/contexts/CalibrationContext";
 import { CoachingEngineProvider } from "@/contexts/CoachingEngineContext";
 import { UploadProvider } from "@/contexts/UploadContext";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import { handleBoundaryError } from "@/lib/sentry";
 
 // Landing page
 import LandingPage from "./pages/LandingPage";
@@ -38,6 +40,7 @@ const App = () => (
             <UploadProvider>
             <TooltipProvider>
             <DatabaseProvider>
+              <ErrorBoundary onError={handleBoundaryError}>
               <Toaster />
               <Sonner />
               <BrowserRouter>
@@ -66,6 +69,7 @@ const App = () => (
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
+              </ErrorBoundary>
             </DatabaseProvider>
           </TooltipProvider>
           </UploadProvider>

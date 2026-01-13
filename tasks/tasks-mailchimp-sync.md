@@ -53,9 +53,9 @@ Update the file after completing each sub-task, not just after completing an ent
 
 ### Phase 1: Database Schema
 
-- [ ] 1.0 Create mailchimp_connections table
-  - [ ] 1.0.1 Read current `supabase/schema.sql`
-  - [ ] 1.0.2 Add `mailchimp_connections` table:
+- [x] 1.0 Create mailchimp_connections table
+  - [x] 1.0.1 Read current `supabase/schema.sql`
+  - [x] 1.0.2 Add `mailchimp_connections` table:
     ```sql
     CREATE TABLE mailchimp_connections (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -70,12 +70,12 @@ Update the file after completing each sub-task, not just after completing an ent
       UNIQUE(user_id)
     );
     ```
-  - [ ] 1.0.3 Add RLS policy: users can only access own connection
-  - [ ] 1.0.4 Add index on user_id
+  - [x] 1.0.3 Add RLS policy: users can only access own connection
+  - [x] 1.0.4 Add index on user_id
   - [ ] 1.0.5 Run migration in Supabase SQL Editor
 
-- [ ] 1.1 Create mailchimp_sync_queue table
-  - [ ] 1.1.1 Add `mailchimp_sync_queue` table:
+- [x] 1.1 Create mailchimp_sync_queue table
+  - [x] 1.1.1 Add `mailchimp_sync_queue` table:
     ```sql
     CREATE TABLE mailchimp_sync_queue (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -91,8 +91,8 @@ Update the file after completing each sub-task, not just after completing an ent
       completed_at timestamptz
     );
     ```
-  - [ ] 1.1.2 Add RLS policy
-  - [ ] 1.1.3 Add indexes on user_id, next_retry_at, completed_at
+  - [x] 1.1.2 Add RLS policy
+  - [x] 1.1.3 Add indexes on user_id, next_retry_at, completed_at
   - [ ] 1.1.4 Run migration in Supabase SQL Editor
 
 - [ ] 1.2 Regenerate TypeScript types
@@ -104,23 +104,23 @@ Update the file after completing each sub-task, not just after completing an ent
 
 ### Phase 2: OAuth Flow
 
-- [ ] 2.0 Create OAuth initiation endpoint
-  - [ ] 2.0.1 Create `api/mailchimp/auth.ts`
-  - [ ] 2.0.2 Generate OAuth authorization URL:
+- [x] 2.0 Create OAuth initiation endpoint
+  - [x] 2.0.1 Create `api/mailchimp/auth.ts`
+  - [x] 2.0.2 Generate OAuth authorization URL:
     ```typescript
     const authUrl = new URL('https://login.mailchimp.com/oauth2/authorize');
     authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('client_id', process.env.MAILCHIMP_CLIENT_ID);
     authUrl.searchParams.set('redirect_uri', process.env.MAILCHIMP_REDIRECT_URI);
     ```
-  - [ ] 2.0.3 Include state parameter for CSRF protection
-  - [ ] 2.0.4 Store state in session/cookie for verification
-  - [ ] 2.0.5 Return redirect URL to client
+  - [x] 2.0.3 Include state parameter for CSRF protection
+  - [x] 2.0.4 Store state in session/cookie for verification
+  - [x] 2.0.5 Return redirect URL to client
 
-- [ ] 2.1 Create OAuth callback handler
-  - [ ] 2.1.1 Create `api/mailchimp/callback.ts`
-  - [ ] 2.1.2 Verify state parameter matches
-  - [ ] 2.1.3 Exchange code for access token:
+- [x] 2.1 Create OAuth callback handler
+  - [x] 2.1.1 Create `api/mailchimp/callback.ts`
+  - [x] 2.1.2 Verify state parameter matches
+  - [x] 2.1.3 Exchange code for access token:
     ```typescript
     POST https://login.mailchimp.com/oauth2/token
     {
@@ -131,30 +131,30 @@ Update the file after completing each sub-task, not just after completing an ent
       code: authorization_code
     }
     ```
-  - [ ] 2.1.4 Get server prefix from metadata endpoint
-  - [ ] 2.1.5 Store connection in `mailchimp_connections` table
-  - [ ] 2.1.6 Redirect user back to Settings page with success message
+  - [x] 2.1.4 Get server prefix from metadata endpoint
+  - [x] 2.1.5 Store connection in `mailchimp_connections` table
+  - [x] 2.1.6 Redirect user back to Settings page with success message
 
-- [ ] 2.2 Create disconnect endpoint
-  - [ ] 2.2.1 Create `api/mailchimp/disconnect.ts`
-  - [ ] 2.2.2 Delete row from `mailchimp_connections`
-  - [ ] 2.2.3 Clear any pending sync queue items for user
-  - [ ] 2.2.4 Do NOT delete contacts from Mailchimp (per spec)
+- [x] 2.2 Create disconnect endpoint
+  - [x] 2.2.1 Create `api/mailchimp/disconnect.ts`
+  - [x] 2.2.2 Delete row from `mailchimp_connections`
+  - [x] 2.2.3 Clear any pending sync queue items for user
+  - [x] 2.2.4 Do NOT delete contacts from Mailchimp (per spec)
 
 ---
 
 ### Phase 3: Mailchimp API Client
 
-- [ ] 3.0 Create Mailchimp sync library
-  - [ ] 3.0.1 Create `src/lib/mailchimp-sync.ts`
-  - [ ] 3.0.2 Implement `getMailchimpClient()`:
+- [x] 3.0 Create Mailchimp sync library
+  - [x] 3.0.1 Create `src/lib/mailchimp-sync.ts`
+  - [x] 3.0.2 Implement `getMailchimpClient()`:
     - Fetch user's connection from database
     - Return configured API client with server prefix
-  - [ ] 3.0.3 Implement `getAudiences()`:
+  - [x] 3.0.3 Implement `getAudiences()`:
     ```typescript
     GET https://{server}.api.mailchimp.com/3.0/lists
     ```
-  - [ ] 3.0.4 Implement `syncContact()`:
+  - [x] 3.0.4 Implement `syncContact()`:
     ```typescript
     PUT /lists/{audience_id}/members/{subscriber_hash}
     {
@@ -167,36 +167,36 @@ Update the file after completing each sub-task, not just after completing an ent
       }
     }
     ```
-  - [ ] 3.0.5 Implement `syncTags()`:
+  - [x] 3.0.5 Implement `syncTags()`:
     ```typescript
     POST /lists/{audience_id}/members/{subscriber_hash}/tags
     {
       tags: [{ name: 'tag1', status: 'active' }, ...]
     }
     ```
-  - [ ] 3.0.6 Implement `deleteContact()`:
+  - [x] 3.0.6 Implement `deleteContact()`:
     ```typescript
     DELETE /lists/{audience_id}/members/{subscriber_hash}
     ```
-  - [ ] 3.0.7 Implement `getSubscriberHash()`:
+  - [x] 3.0.7 Implement `getSubscriberHash()`:
     ```typescript
     return md5(email.toLowerCase());
     ```
 
-- [ ] 3.1 Add error handling
-  - [ ] 3.1.1 Handle rate limit errors (429)
-  - [ ] 3.1.2 Handle authentication errors (401)
-  - [ ] 3.1.3 Handle not found errors (404)
-  - [ ] 3.1.4 Handle server errors (5xx)
-  - [ ] 3.1.5 Wrap all API calls in try/catch
+- [x] 3.1 Add error handling
+  - [x] 3.1.1 Handle rate limit errors (429)
+  - [x] 3.1.2 Handle authentication errors (401)
+  - [x] 3.1.3 Handle not found errors (404)
+  - [x] 3.1.4 Handle server errors (5xx)
+  - [x] 3.1.5 Wrap all API calls in try/catch
 
 ---
 
 ### Phase 4: Sync Queue & Retry Logic
 
-- [ ] 4.0 Create queue management functions
-  - [ ] 4.0.1 Add to `src/lib/mailchimp-sync.ts`:
-  - [ ] 4.0.2 Implement `enqueueSync()`:
+- [x] 4.0 Create queue management functions
+  - [x] 4.0.1 Add to `src/lib/mailchimp-sync.ts`:
+  - [x] 4.0.2 Implement `enqueueSync()`:
     ```typescript
     async function enqueueSync(
       userId: string,
@@ -205,99 +205,99 @@ Update the file after completing each sub-task, not just after completing an ent
       payload?: object
     )
     ```
-  - [ ] 4.0.3 Implement `processQueue()`:
+  - [x] 4.0.3 Implement `processQueue()`:
     - Fetch pending items where `next_retry_at <= now()`
     - Process each item
     - On success: set `completed_at`
     - On failure: increment `attempts`, calculate `next_retry_at`
-  - [ ] 4.0.4 Implement exponential backoff:
+  - [x] 4.0.4 Implement exponential backoff:
     ```typescript
     const delays = [1000, 2000, 4000, 8000, 16000]; // ms
     const nextRetry = new Date(Date.now() + delays[attempts]);
     ```
-  - [ ] 4.0.5 Implement `markFailed()`:
+  - [x] 4.0.5 Implement `markFailed()`:
     - After max attempts, mark as permanently failed
     - Update user's `sync_status` to 'error'
 
-- [ ] 4.1 Create background sync worker
-  - [ ] 4.1.1 Create `api/mailchimp/sync.ts` (Vercel cron or manual trigger)
-  - [ ] 4.1.2 Fetch all users with pending queue items
-  - [ ] 4.1.3 Process queue for each user
-  - [ ] 4.1.4 Add rate limiting (respect Mailchimp's 10 concurrent connections)
-  - [ ] 4.1.5 Log sync results for monitoring
+- [x] 4.1 Create background sync worker
+  - [x] 4.1.1 Create `api/mailchimp/sync.ts` (Vercel cron or manual trigger)
+  - [x] 4.1.2 Fetch all users with pending queue items
+  - [x] 4.1.3 Process queue for each user
+  - [x] 4.1.4 Add rate limiting (respect Mailchimp's 10 concurrent connections)
+  - [x] 4.1.5 Log sync results for monitoring
 
 ---
 
 ### Phase 5: Sync Triggers
 
-- [ ] 5.0 Create database trigger function
+- [x] 5.0 Create database trigger function
   - [ ] 5.0.1 Option A: Supabase Database Webhook
     - Create webhook on `contacts` table for INSERT, UPDATE, DELETE
     - Point to sync endpoint
-  - [ ] 5.0.2 Option B: Application-level triggers
+  - [x] 5.0.2 Option B: Application-level triggers
     - Hook into contact CRUD operations in app code
 
-- [ ] 5.1 Wire contact creation to sync
-  - [ ] 5.1.1 Read `src/components/database/CreateContactModal.tsx`
-  - [ ] 5.1.2 After successful contact creation, call `enqueueSync(userId, contactId, 'create')`
-  - [ ] 5.1.3 Only enqueue if user has Mailchimp connected
-  - [ ] 5.1.4 Only enqueue if contact has email address
+- [x] 5.1 Wire contact creation to sync
+  - [x] 5.1.1 Read `src/components/database/CreateContactModal.tsx`
+  - [x] 5.1.2 After successful contact creation, call `enqueueSync(userId, contactId, 'create')`
+  - [x] 5.1.3 Only enqueue if user has Mailchimp connected
+  - [x] 5.1.4 Only enqueue if contact has email address
 
-- [ ] 5.2 Wire contact update to sync
-  - [ ] 5.2.1 Read `src/pages/Database.tsx` or relevant update handler
-  - [ ] 5.2.2 After successful contact update, call `enqueueSync(userId, contactId, 'update')`
+- [x] 5.2 Wire contact update to sync
+  - [x] 5.2.1 Read `src/pages/Database.tsx` or relevant update handler
+  - [x] 5.2.2 After successful contact update, call `enqueueSync(userId, contactId, 'update')`
   - [ ] 5.2.3 Include changed fields in payload for optimization
 
-- [ ] 5.3 Wire tag changes to sync
-  - [ ] 5.3.1 Identify where tags are modified
-  - [ ] 5.3.2 After tag change, call `enqueueSync(userId, contactId, 'update')`
-  - [ ] 5.3.3 Include tags in payload
+- [x] 5.3 Wire tag changes to sync
+  - [x] 5.3.1 Identify where tags are modified
+  - [x] 5.3.2 After tag change, call `enqueueSync(userId, contactId, 'update')`
+  - [x] 5.3.3 Include tags in payload
 
-- [ ] 5.4 Wire contact deletion to sync
-  - [ ] 5.4.1 After confirmed deletion, call `enqueueSync(userId, contactId, 'delete')`
-  - [ ] 5.4.2 Store email in payload (needed after contact deleted from DB)
+- [x] 5.4 Wire contact deletion to sync
+  - [x] 5.4.1 After confirmed deletion, call `enqueueSync(userId, contactId, 'delete')`
+  - [x] 5.4.2 Store email in payload (needed after contact deleted from DB)
   - [ ] 5.4.3 Ensure deletion flows through coaching confirmation first
 
 ---
 
 ### Phase 6: Settings UI
 
-- [ ] 6.0 Create or update Settings page
-  - [ ] 6.0.1 Check if `src/pages/Settings.tsx` exists, create if not
-  - [ ] 6.0.2 Add route in App.tsx if needed
-  - [ ] 6.0.3 Add Settings link to sidebar navigation
+- [x] 6.0 Create or update Settings page
+  - [x] 6.0.1 Check if `src/pages/Settings.tsx` exists, create if not
+  - [x] 6.0.2 Add route in App.tsx if needed
+  - [x] 6.0.3 Add Settings link to sidebar navigation
 
-- [ ] 6.1 Create Mailchimp connection section
-  - [ ] 6.1.1 Create `src/components/settings/MailchimpConnection.tsx`
-  - [ ] 6.1.2 Fetch user's Mailchimp connection status on mount
-  - [ ] 6.1.3 If not connected:
+- [x] 6.1 Create Mailchimp connection section
+  - [x] 6.1.1 Create `src/components/settings/MailchimpConnection.tsx`
+  - [x] 6.1.2 Fetch user's Mailchimp connection status on mount
+  - [x] 6.1.3 If not connected:
     - Show "Connect Mailchimp" button
     - On click, redirect to OAuth flow
-  - [ ] 6.1.4 If connected:
+  - [x] 6.1.4 If connected:
     - Show "Connected to [audience name]"
     - Show "Last synced: [time ago]"
     - Show "Sync Now" button
     - Show "Disconnect" button
-  - [ ] 6.1.5 Add info text: "Contacts sync automatically. You don't need to do anything."
+  - [x] 6.1.5 Add info text: "Contacts sync automatically. You don't need to do anything."
 
-- [ ] 6.2 Implement audience selection
-  - [ ] 6.2.1 After OAuth, fetch user's audiences
-  - [ ] 6.2.2 If single audience, auto-select and save
-  - [ ] 6.2.3 If multiple audiences, show selection modal/dropdown
-  - [ ] 6.2.4 Save selected audience_id to connection record
+- [x] 6.2 Implement audience selection
+  - [x] 6.2.1 After OAuth, fetch user's audiences
+  - [x] 6.2.2 If single audience, auto-select and save
+  - [x] 6.2.3 If multiple audiences, show selection modal/dropdown
+  - [x] 6.2.4 Save selected audience_id to connection record
   - [ ] 6.2.5 Allow changing audience in Settings
 
-- [ ] 6.3 Implement "Sync Now" button
-  - [ ] 6.3.1 On click, queue all user's contacts for sync
-  - [ ] 6.3.2 Show loading state
-  - [ ] 6.3.3 Rate limit: once per hour
-  - [ ] 6.3.4 Show success message when queued
+- [x] 6.3 Implement "Sync Now" button
+  - [x] 6.3.1 On click, queue all user's contacts for sync
+  - [x] 6.3.2 Show loading state
+  - [x] 6.3.3 Rate limit: once per hour
+  - [x] 6.3.4 Show success message when queued
 
-- [ ] 6.4 Implement "Disconnect" button
+- [x] 6.4 Implement "Disconnect" button
   - [ ] 6.4.1 Show confirmation dialog
-  - [ ] 6.4.2 On confirm, call disconnect endpoint
-  - [ ] 6.4.3 Clear UI state
-  - [ ] 6.4.4 Show success message
+  - [x] 6.4.2 On confirm, call disconnect endpoint
+  - [x] 6.4.3 Clear UI state
+  - [x] 6.4.4 Show success message
 
 ---
 
@@ -309,26 +309,26 @@ Update the file after completing each sub-task, not just after completing an ent
   - [ ] 7.0.3 Return: `{ connected, syncStatus, lastSyncAt }`
   - [ ] 7.0.4 Poll or subscribe for status changes
 
-- [ ] 7.1 Add sync failure notice to CoachPanel
-  - [ ] 7.1.1 Read `src/components/layout/CoachPanel.tsx`
-  - [ ] 7.1.2 Import `useMailchimpStatus`
-  - [ ] 7.1.3 If `syncStatus === 'error'`, show notice:
+- [x] 7.1 Add sync failure notice to CoachPanel
+  - [x] 7.1.1 Read `src/components/layout/CoachPanel.tsx`
+  - [x] 7.1.2 Import `useMailchimpStatus`
+  - [x] 7.1.3 If `syncStatus === 'error'`, show notice:
     ```
     ℹ️ Heads up—email sync is paused right now.
        Your contacts are still safe. [×]
     ```
   - [ ] 7.1.4 Notice is dismissible
-  - [ ] 7.1.5 Notice auto-hides when sync resumes
-  - [ ] 7.1.6 Style as calm/informational, not alarming
+  - [x] 7.1.5 Notice auto-hides when sync resumes
+  - [x] 7.1.6 Style as calm/informational, not alarming
 
 ---
 
 ### Phase 8: Initial Sync
 
-- [ ] 8.0 Implement initial sync on connection
-  - [ ] 8.0.1 After OAuth + audience selection complete
-  - [ ] 8.0.2 Fetch all user's contacts with email addresses
-  - [ ] 8.0.3 Queue each for sync (batch if many)
+- [x] 8.0 Implement initial sync on connection
+  - [x] 8.0.1 After OAuth + audience selection complete
+  - [x] 8.0.2 Fetch all user's contacts with email addresses
+  - [x] 8.0.3 Queue each for sync (batch if many)
   - [ ] 8.0.4 Show progress indicator in Settings
   - [ ] 8.0.5 Handle large contact lists (pagination)
 

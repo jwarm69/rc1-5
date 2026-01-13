@@ -50,9 +50,9 @@ Update the file after completing each sub-task, not just after completing an ent
 
 ### Phase 1: Type Definitions
 
-- [ ] 1.0 Create screenshot types file
-  - [ ] 1.1 Create `src/types/screenshot.ts`
-  - [ ] 1.2 Define `UploadState` enum:
+- [x] 1.0 Create screenshot types file
+  - [x] 1.1 Create `src/types/screenshot.ts`
+  - [x] 1.2 Define `UploadState` enum:
     ```typescript
     export type UploadState =
       | 'UPLOAD_IDLE'
@@ -63,7 +63,7 @@ Update the file after completing each sub-task, not just after completing an ent
       | 'UPLOAD_CONFIRMED'
       | 'UPLOAD_FAILED';
     ```
-  - [ ] 1.3 Define `ContentType` enum for classification:
+  - [x] 1.3 Define `ContentType` enum for classification:
     ```typescript
     export type ContentType =
       | 'text_conversation'
@@ -78,7 +78,7 @@ Update the file after completing each sub-task, not just after completing an ent
       | 'mixed'
       | 'unknown';
     ```
-  - [ ] 1.4 Define `ScreenshotInterpretation` interface:
+  - [x] 1.4 Define `ScreenshotInterpretation` interface:
     ```typescript
     export interface ScreenshotInterpretation {
       id: string;
@@ -91,7 +91,7 @@ Update the file after completing each sub-task, not just after completing an ent
       confidence: number;          // 0-1
     }
     ```
-  - [ ] 1.5 Define `ScreenshotSignal` interface:
+  - [x] 1.5 Define `ScreenshotSignal` interface:
     ```typescript
     export interface ScreenshotSignal {
       id: string;
@@ -108,7 +108,7 @@ Update the file after completing each sub-task, not just after completing an ent
       };
     }
     ```
-  - [ ] 1.6 Define `UploadedImage` interface:
+  - [x] 1.6 Define `UploadedImage` interface:
     ```typescript
     export interface UploadedImage {
       id: string;
@@ -123,9 +123,9 @@ Update the file after completing each sub-task, not just after completing an ent
 
 ### Phase 2: Upload Context
 
-- [ ] 2.0 Create upload state context
-  - [ ] 2.1 Create `src/contexts/UploadContext.tsx`
-  - [ ] 2.2 Define context state:
+- [x] 2.0 Create upload state context
+  - [x] 2.1 Create `src/contexts/UploadContext.tsx`
+  - [x] 2.2 Define context state:
     ```typescript
     interface UploadContextState {
       uploadState: UploadState;
@@ -135,7 +135,7 @@ Update the file after completing each sub-task, not just after completing an ent
       error?: string;
     }
     ```
-  - [ ] 2.3 Implement context actions:
+  - [x] 2.3 Implement context actions:
     - `addImages(files: File[])`
     - `removeImage(id: string)`
     - `setUserIntent(intent: string)`
@@ -144,31 +144,31 @@ Update the file after completing each sub-task, not just after completing an ent
     - `adjustInterpretation(newIntent: string)`
     - `rejectInterpretation()`
     - `reset()`
-  - [ ] 2.4 Implement state machine transitions with validation
-  - [ ] 2.5 Add 10-image limit enforcement
-  - [ ] 2.6 Add daily upload limit tracking (10 per day)
-  - [ ] 2.7 Wire up to App.tsx provider tree
+  - [x] 2.4 Implement state machine transitions with validation
+  - [x] 2.5 Add 10-image limit enforcement
+  - [x] 2.6 Add daily upload limit tracking (10 per day)
+  - [x] 2.7 Wire up to App.tsx provider tree
   - [ ] 2.8 Test context isolation with React DevTools
 
 ---
 
 ### Phase 3: LLM Vision Integration
 
-- [ ] 3.0 Extend LLM proxy for vision
-  - [ ] 3.1 Read current `api/llm/route.ts` implementation
-  - [ ] 3.2 Add vision request type handling:
+- [x] 3.0 Extend LLM proxy for vision
+  - [x] 3.1 Read current `api/llm/route.ts` implementation
+  - [x] 3.2 Add vision request type handling:
     ```typescript
     if (body.type === 'vision') {
       // Handle vision request with images
     }
     ```
-  - [ ] 3.3 Format images for Claude Vision API (base64 with media type)
+  - [x] 3.3 Format images for Claude Vision API (base64 with media type)
   - [ ] 3.4 Add vision-specific rate limiting (separate from text)
   - [ ] 3.5 Test with sample image upload
 
-- [ ] 3.1 Add client-side vision methods
-  - [ ] 3.1.1 Read current `src/lib/llm/client.ts`
-  - [ ] 3.1.2 Add `interpretScreenshot()` method:
+- [x] 3.1 Add client-side vision methods
+  - [x] 3.1.1 Read current `src/lib/llm/client.ts`
+  - [x] 3.1.2 Add `interpretScreenshot()` method:
     ```typescript
     async interpretScreenshot(
       images: string[],  // base64
@@ -179,9 +179,9 @@ Update the file after completing each sub-task, not just after completing an ent
   - [ ] 3.1.3 Handle streaming response for interpretation
   - [ ] 3.1.4 Add timeout handling (30 second max)
 
-- [ ] 3.2 Create interpretation prompts
-  - [ ] 3.2.1 Read current `src/lib/llm/prompts.ts`
-  - [ ] 3.2.2 Add `buildScreenshotInterpretationPrompt()`:
+- [x] 3.2 Create interpretation prompts
+  - [x] 3.2.1 Read current `src/lib/llm/prompts.ts`
+  - [x] 3.2.2 Add `buildScreenshotInterpretationPrompt()`:
     - Include content type classification instructions
     - Include person detection instructions
     - Include date/time extraction instructions
@@ -194,25 +194,25 @@ Update the file after completing each sub-task, not just after completing an ent
 
 ### Phase 4: Interpretation Pipeline
 
-- [ ] 4.0 Create screenshot interpreter
-  - [ ] 4.1 Create `src/lib/screenshot-interpreter.ts`
-  - [ ] 4.2 Implement `classifyContent()`:
+- [x] 4.0 Create screenshot interpreter
+  - [x] 4.1 Create `src/lib/screenshot-interpreter.ts`
+  - [x] 4.2 Implement `classifyContent()`:
     - Parse LLM response for content type
     - Return ContentType enum value
-  - [ ] 4.3 Implement `extractPeople()`:
+  - [x] 4.3 Implement `extractPeople()`:
     - Parse names from interpretation
     - Return array of detected names
-  - [ ] 4.4 Implement `extractDates()`:
+  - [x] 4.4 Implement `extractDates()`:
     - Parse dates/times from interpretation
     - Normalize to ISO format
-  - [ ] 4.5 Implement `detectPatterns()`:
+  - [x] 4.5 Implement `detectPatterns()`:
     - Identify gaps in conversation
     - Identify overload signals
     - Identify urgency signals
-  - [ ] 4.6 Implement `generateSummary()`:
+  - [x] 4.6 Implement `generateSummary()`:
     - Create concise bullet points
     - Max 5 bullets per interpretation
-  - [ ] 4.7 Implement `matchContacts()`:
+  - [x] 4.7 Implement `matchContacts()`:
     - Fuzzy match detected names against user's contacts
     - Return potential matches with confidence scores
   - [ ] 4.8 Add unit tests for each function
@@ -221,8 +221,8 @@ Update the file after completing each sub-task, not just after completing an ent
 
 ### Phase 5: Signal Generation
 
-- [ ] 5.0 Implement signal generation
-  - [ ] 5.1 Add `generateSignals()` to screenshot-interpreter.ts:
+- [x] 5.0 Implement signal generation
+  - [x] 5.1 Add `generateSignals()` to screenshot-interpreter.ts:
     ```typescript
     function generateSignals(
       interpretation: ScreenshotInterpretation,
@@ -230,77 +230,77 @@ Update the file after completing each sub-task, not just after completing an ent
       resolvedContactId?: string
     ): ScreenshotSignal[]
     ```
-  - [ ] 5.2 Implement signal type selection logic:
+  - [x] 5.2 Implement signal type selection logic:
     - Conversation with follow-up gap → `follow_up` signal
     - Calendar overload → `scheduling` signal
     - Contact info detected → `contact_note` signal
     - Pipeline-relevant info → `pipeline` signal
     - Coaching-relevant insight → `coaching` signal
-  - [ ] 5.3 Add signal metadata population
-  - [ ] 5.4 Add signal handoff to Daily Action Engine:
+  - [x] 5.3 Add signal metadata population
+  - [x] 5.4 Add signal handoff to Daily Action Engine:
     - Create `src/lib/signal-handler.ts` if needed
     - Integrate with existing action generation
-  - [ ] 5.5 Add signal handoff to Coaching Behavior Engine
+  - [x] 5.5 Add signal handoff to Coaching Behavior Engine
   - [ ] 5.6 Add unit tests for signal generation
 
 ---
 
 ### Phase 6: UI Components
 
-- [ ] 6.0 Create InterpretationCard component
-  - [ ] 6.1 Create `src/components/chat/InterpretationCard.tsx`
-  - [ ] 6.2 Implement collapsible card structure:
+- [x] 6.0 Create InterpretationCard component
+  - [x] 6.1 Create `src/components/chat/InterpretationCard.tsx`
+  - [x] 6.2 Implement collapsible card structure:
     - Header: "📷 Here's what I see:" with collapse toggle
     - Body: Bullet list of summary items
     - People section (if detected)
     - Dates section (if detected)
     - Patterns section (if notable)
     - Inferred intent disclosure
-  - [ ] 6.3 Add confirmation buttons: Yes / Adjust / No
-  - [ ] 6.4 Style to match existing chat card components
-  - [ ] 6.5 Add loading state variant
-  - [ ] 6.6 Add error state variant
+  - [x] 6.3 Add confirmation buttons: Yes / Adjust / No
+  - [x] 6.4 Style to match existing chat card components
+  - [x] 6.5 Add loading state variant
+  - [x] 6.6 Add error state variant
   - [ ] 6.7 Add accessibility (ARIA labels, keyboard nav)
 
-- [ ] 6.1 Create upload preview component
-  - [ ] 6.1.1 Create `src/components/chat/UploadPreview.tsx`
-  - [ ] 6.1.2 Show thumbnail grid of uploaded images
-  - [ ] 6.1.3 Add remove button for each image
-  - [ ] 6.1.4 Show upload count (e.g., "3 of 10 max")
+- [x] 6.1 Create upload preview component
+  - [x] 6.1.1 Create `src/components/chat/UploadPreview.tsx`
+  - [x] 6.1.2 Show thumbnail grid of uploaded images
+  - [x] 6.1.3 Add remove button for each image
+  - [x] 6.1.4 Show upload count (e.g., "3 of 10 max")
 
-- [ ] 6.2 Create clarification prompt component
-  - [ ] 6.2.1 Create `src/components/chat/ClarificationPrompt.tsx`
-  - [ ] 6.2.2 Display "What would you like me to do with this?"
-  - [ ] 6.2.3 Show suggested options based on content type
-  - [ ] 6.2.4 Allow free-form text input
+- [x] 6.2 Create clarification prompt component
+  - [x] 6.2.1 Create `src/components/chat/ClarificationPrompt.tsx`
+  - [x] 6.2.2 Display "What would you like me to do with this?"
+  - [x] 6.2.3 Show suggested options based on content type
+  - [x] 6.2.4 Allow free-form text input
 
 ---
 
 ### Phase 7: CoachPanel Integration
 
-- [ ] 7.0 Add upload button to CoachPanel
-  - [ ] 7.0.1 Read current `src/components/layout/CoachPanel.tsx`
-  - [ ] 7.0.2 Add paperclip/image icon button left of text input
-  - [ ] 7.0.3 Wire button to hidden file input
-  - [ ] 7.0.4 Filter file input to images: `accept="image/png,image/jpeg,image/gif,image/webp"`
-  - [ ] 7.0.5 Handle file selection → add to UploadContext
-  - [ ] 7.0.6 Style button to be passive (no promotional styling)
+- [x] 7.0 Add upload button to CoachPanel
+  - [x] 7.0.1 Read current `src/components/layout/CoachPanel.tsx`
+  - [x] 7.0.2 Add paperclip/image icon button left of text input
+  - [x] 7.0.3 Wire button to hidden file input
+  - [x] 7.0.4 Filter file input to images: `accept="image/png,image/jpeg,image/gif,image/webp"`
+  - [x] 7.0.5 Handle file selection → add to UploadContext
+  - [x] 7.0.6 Style button to be passive (no promotional styling)
 
-- [ ] 7.1 Add drag-and-drop support
-  - [ ] 7.1.1 Add drop zone to CoachPanel
-  - [ ] 7.1.2 Show visual indicator when dragging over
-  - [ ] 7.1.3 Handle drop → add files to UploadContext
-  - [ ] 7.1.4 Validate dropped files are images
+- [x] 7.1 Add drag-and-drop support
+  - [x] 7.1.1 Add drop zone to CoachPanel
+  - [x] 7.1.2 Show visual indicator when dragging over
+  - [x] 7.1.3 Handle drop → add files to UploadContext
+  - [x] 7.1.4 Validate dropped files are images
 
-- [ ] 7.2 Integrate upload flow into chat
-  - [ ] 7.2.1 When images added, show UploadPreview in chat
-  - [ ] 7.2.2 Allow text input alongside images (user intent)
-  - [ ] 7.2.3 On send with images → start interpretation flow
-  - [ ] 7.2.4 Show loading state during interpretation
-  - [ ] 7.2.5 Show InterpretationCard when complete
-  - [ ] 7.2.6 Handle confirmation buttons
-  - [ ] 7.2.7 Show success message after signal generation
-  - [ ] 7.2.8 Reset upload state after completion
+- [x] 7.2 Integrate upload flow into chat
+  - [x] 7.2.1 When images added, show UploadPreview in chat
+  - [x] 7.2.2 Allow text input alongside images (user intent)
+  - [x] 7.2.3 On send with images → start interpretation flow
+  - [x] 7.2.4 Show loading state during interpretation
+  - [x] 7.2.5 Show InterpretationCard when complete
+  - [x] 7.2.6 Handle confirmation buttons
+  - [x] 7.2.7 Show success message after signal generation
+  - [x] 7.2.8 Reset upload state after completion
 
 - [ ] 7.3 Add timeout handling
   - [ ] 7.3.1 After 10 seconds, show "Still working..." message
@@ -333,15 +333,15 @@ Update the file after completing each sub-task, not just after completing an ent
 
 ### Phase 9: Error Handling
 
-- [ ] 9.0 Implement error states
-  - [ ] 9.0.1 Upload failure → show retry button
-  - [ ] 9.0.2 Interpretation failure → suggest re-upload
+- [x] 9.0 Implement error states
+  - [x] 9.0.1 Upload failure → show retry button
+  - [x] 9.0.2 Interpretation failure → suggest re-upload
   - [ ] 9.0.3 Image quality issues → explain why (blurry, cut off)
   - [ ] 9.0.4 Rate limit exceeded → show daily limit message
   - [ ] 9.0.5 Network errors → show connectivity message
 
 - [ ] 9.1 Add error tracking
-  - [ ] 9.1.1 Log interpretation errors with metadata
+  - [x] 9.1.1 Log interpretation errors with metadata
   - [ ] 9.1.2 Track failure rates for monitoring
   - [ ] 9.1.3 Add error recovery suggestions
 
@@ -398,13 +398,13 @@ Update the file after completing each sub-task, not just after completing an ent
 
 After completing all tasks, verify:
 
-- [ ] Upload button appears in CoachPanel
-- [ ] Can upload up to 10 images
-- [ ] "Here's What I See" card renders with interpretation
-- [ ] Yes/Adjust/No buttons work correctly
-- [ ] Signals are generated only after "Yes"
-- [ ] No database modifications without explicit confirmation
+- [x] Upload button appears in CoachPanel
+- [x] Can upload up to 10 images
+- [x] "Here's What I See" card renders with interpretation
+- [x] Yes/Adjust/No buttons work correctly
+- [x] Signals are generated only after "Yes"
+- [x] No database modifications without explicit confirmation
 - [ ] Screenshots are deleted from storage after interpretation
-- [ ] Daily upload limit (10) is enforced
+- [x] Daily upload limit (10) is enforced
 - [ ] All tests pass
 - [ ] Build succeeds
